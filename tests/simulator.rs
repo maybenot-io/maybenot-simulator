@@ -1,5 +1,5 @@
 use log::debug;
-use sim::{queue::SimQueue, sim, SimEvent};
+use maybenot_simulator::{queue::SimQueue, sim, SimEvent};
 
 use std::{
     cmp::Reverse,

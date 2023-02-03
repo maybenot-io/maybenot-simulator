@@ -1,5 +1,5 @@
 [package]
-name = "sim"
+name = "maybenot-simulator"
 version = "0.1.0"
 edition = "2021"
 
