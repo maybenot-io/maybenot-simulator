@@ -1,3 +1,5 @@
+//! Functions for peeking at the possible next events in the simulation.
+
 use std::{
     collections::HashMap,
     time::{Duration, Instant},

@@ -1,3 +1,6 @@
+//! For simulating network activity: sending and receiving packets between the
+//! client and server.
+
 use std::{
     cmp::Reverse,
     time::{Duration, Instant},

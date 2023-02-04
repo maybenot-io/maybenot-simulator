@@ -1,3 +1,5 @@
+//! The main queue of events in the simulator.
+
 use std::{cmp::Reverse, time::Instant};
 
 use maybenot::framework::TriggerEvent;

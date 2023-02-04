@@ -1,3 +1,111 @@
+//! A simulator for the Maybenot framework. The [`Maybenot`](maybenot) framework
+//! is intended for traffic analysis defenses that can be used to hide patterns
+//! in encrypted communication. The goal of the simulator is to assist in the
+//! development of such defenses.
+//!
+//! The simulator consists of two core functions: [`parse_trace`] and [`sim`].
+//! The intended use is to first parse a trace (e.g., from a pcap file or a
+//! Website Fingerprinting dataset) using [`parse_trace`], and then simulate the
+//! trace using [`sim`] together with one or more Maybenot
+//! [`Machines`](maybenot::machine::Machine) running at the client and/or
+//! server. The output of the simulator can then be parsed to produce a
+//! simulated trace that then in turn can be used to, e.g., train a Website
+//! Fingerprinting attack.
+//!
+//! ## Example usage
+//! ```
+//! use maybenot::{framework::TriggerEvent, machine::Machine};
+//! use maybenot_simulator::{parse_trace, sim};
+//! use std::{str::FromStr, time::Duration};
+//!
+//! // A trace of ten packets from the client's perspective when visiting
+//! // google.com over WireGuard. The format is: "time,direction,size\n". The
+//! // direction is either "s" (sent) or "r" (received). The time is in
+//! // nanoseconds since the start of the trace. The size is in bytes.
+//! let raw_trace = "0,s,52
+//! 19714282,r,52
+//! 183976147,s,52
+//! 243699564,r,52
+//! 1696037773,s,40
+//! 2047985926,s,52
+//! 2055955094,r,52
+//! 9401039609,s,73
+//! 9401094589,s,73
+//! 9420892765,r,191";
+//!
+//! // The delay between client and server. This is for the simulation of the
+//! // network between the client and server
+//! let delay = Duration::from_millis(10);
+//!
+//! // Parse the raw trace into a queue of events for the simulator. This uses
+//! // the delay to generate a queue of events at the client and server in such
+//! // a way that the client is ensured to get the packets in the same order and
+//! // at the same time as in the raw trace.
+//! let mut input_trace = parse_trace(raw_trace, delay);
+//!
+//! // A simple machine that sends one padding packet of 1000 bytes 20
+//! // milliseconds after the first NonPaddingSent is sent.
+//! let m = "789cedcfc10900200805506d82b6688c1caf5bc3b54823f4a1a2a453b7021ff8ff49\
+//! 41261f685323426187f8d3f9cceb18039205b9facab8914adf9d6d9406142f07f0";
+//! let m = Machine::from_str(m).unwrap();
+//!
+//! // Run the simulator with the machine at the client. Run the simulation up
+//! // until 100 packets have been recorded (total, client and server).
+//! let trace = sim(vec![m], vec![], &mut input_trace, delay, 100, true);
+//!
+//! // print packets from the client's perspective
+//! let starting_time = trace[0].time;
+//! trace
+//!     .into_iter()
+//!     .filter(|p| p.client)
+//!     .for_each(|p| match p.event {
+//!         TriggerEvent::NonPaddingSent { bytes_sent } => {
+//!             println!(
+//!                 "sent {} bytes at {} ms",
+//!                 bytes_sent,
+//!                 (p.time - starting_time).as_millis()
+//!             );
+//!         }
+//!         TriggerEvent::PaddingSent { bytes_sent, .. } => {
+//!             println!(
+//!                 "sent {} bytes of padding at {} ms",
+//!                 bytes_sent,
+//!                 (p.time - starting_time).as_millis()
+//!             );
+//!         }
+//!         TriggerEvent::NonPaddingRecv { bytes_recv } => {
+//!             println!(
+//!                 "received {} bytes at {} ms",
+//!                 bytes_recv,
+//!                 (p.time - starting_time).as_millis()
+//!             );
+//!         }
+//!         TriggerEvent::PaddingRecv { bytes_recv, .. } => {
+//!             println!(
+//!                 "received {} bytes of padding at {} ms",
+//!                 bytes_recv,
+//!                 (p.time - starting_time).as_millis()
+//!             );
+//!         }
+//!         _ => {}
+//!     });
+//!
+//! ```
+//!  Prints the following output:
+//! ```text
+//! sent 52 bytes at 0 ms
+//! received 52 bytes at 19 ms
+//! sent 1000 bytes of padding at 20 ms
+//! sent 52 bytes at 183 ms
+//! received 52 bytes at 243 ms
+//! sent 40 bytes at 1696 ms
+//! sent 52 bytes at 2047 ms
+//! received 52 bytes at 2055 ms
+//! sent 73 bytes at 9401 ms
+//! sent 73 bytes at 9401 ms
+//! received 191 bytes at 9420 ms
+//! ```
+
 pub mod network;
 pub mod peek;
 pub mod queue;
@@ -76,6 +184,26 @@ impl SimState {
     }
 }
 
+/// The main simulator function.
+///
+/// Zero or more machines can concurrently be run on the client and server. The
+/// machines can be different. The framework is designed to support many
+/// machines.
+/// 
+/// The queue MUST have been created by [`parse_trace`] with the same delay. The
+/// queue is modified by the simulator and should be re-created for each run of
+/// the simulator or cloned.
+/// 
+/// If max_trace_length is > 0, the simulator will stop after max_trace_length
+/// events have been *simulated* by the simulator and added to the simulating
+/// output trace. Note that some machines may schedule infinite actions (e.g.,
+/// schedule new padding after sending padding), so the simulator may never
+/// stop.
+/// 
+/// If only_network_activity is true, the simulator will only append events that
+/// are related to network activity (i.e., packets sent and received) to the
+/// output trace. This is recommended if you want to use the output trace for
+/// traffic analysis without further (recursive) simulation.
 pub fn sim(
     machines_client: Vec<Machine>,
     machines_server: Vec<Machine>,
@@ -425,14 +553,27 @@ fn trigger_update(
     }
 }
 
-pub fn parse_trace(trace: &str, starting_time: Instant, delay: Duration) -> SimQueue {
+/// Parse a trace into a [`SimQueue`] for use with [`sim`].
+///
+/// The trace should contain one or more lines of the form
+/// "time,direction,size\n", where time is in nanoseconds relative to the first
+/// line, direction is either "s" for sent or "r" for received, and size is the
+/// number of bytes sent or received. The delay is used to model the network
+/// delay between the client and server. Returns a SimQueue with the events in
+/// the trace for use with [`sim`].
+pub fn parse_trace(trace: &str, delay: Duration) -> SimQueue {
     let mut sq = SimQueue::new();
+
+    // we just need a random starting time to make sure that we don't start from
+    // absolute 0
+    let starting_time = Instant::now();
 
     for l in trace.lines() {
         let parts: Vec<&str> = l.split(",").collect();
         if parts.len() == 3 {
-            let timestamp = starting_time + Duration::from_nanos(parts[0].parse::<u64>().unwrap());
-            let size = parts[2].parse::<u64>().unwrap();
+            let timestamp =
+                starting_time + Duration::from_nanos(parts[0].trim().parse::<u64>().unwrap());
+            let size = parts[2].trim().parse::<u64>().unwrap();
 
             match parts[1] {
                 "s" => {
