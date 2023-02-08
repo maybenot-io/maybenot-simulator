@@ -189,17 +189,17 @@ impl SimState {
 /// Zero or more machines can concurrently be run on the client and server. The
 /// machines can be different. The framework is designed to support many
 /// machines.
-/// 
+///
 /// The queue MUST have been created by [`parse_trace`] with the same delay. The
 /// queue is modified by the simulator and should be re-created for each run of
 /// the simulator or cloned.
-/// 
+///
 /// If max_trace_length is > 0, the simulator will stop after max_trace_length
 /// events have been *simulated* by the simulator and added to the simulating
 /// output trace. Note that some machines may schedule infinite actions (e.g.,
 /// schedule new padding after sending padding), so the simulator may never
 /// stop.
-/// 
+///
 /// If only_network_activity is true, the simulator will only append events that
 /// are related to network activity (i.e., packets sent and received) to the
 /// output trace. This is recommended if you want to use the output trace for
