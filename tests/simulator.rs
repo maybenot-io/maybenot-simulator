@@ -582,8 +582,7 @@ fn test_bypass_machine() {
 
 #[test_log::test]
 fn test_replace_machine() {
-    // test replace within the network replace window, both before and after a
-    // padding packet
+    // test replace within the network replace window
 
     // a simple machine that pads every 2us six times
     let num_states = 2;
@@ -676,4 +675,97 @@ fn test_replace_machine() {
         40,
         true,
     );
+}
+
+#[test_log::test]
+fn test_bypass_replace_machine() {
+    // test a machine that uses bypass and replace to construct a client-side
+    // constant-rate defense
+
+    let num_states = 3;
+    // 0->1 on NonPaddingSent
+    let mut t: HashMap<Event, HashMap<usize, f64>> = HashMap::new();
+    let mut e: HashMap<usize, f64> = HashMap::new();
+    e.insert(1, 1.0);
+    t.insert(Event::NonPaddingSent, e);
+    let s0 = State::new(t, num_states);
+    // 1: block for 1000us after 1us, bypassable
+    // 1->2 on BlockingBegin
+    let mut t: HashMap<Event, HashMap<usize, f64>> = HashMap::new();
+    let mut e: HashMap<usize, f64> = HashMap::new();
+    e.insert(2, 1.0);
+    t.insert(Event::BlockingBegin, e);
+    let mut s1 = State::new(t, num_states);
+    s1.action_is_block = true;
+    s1.timeout = Dist {
+        dist: DistType::Uniform,
+        param1: 1.0,
+        param2: 1.0,
+        start: 0.0,
+        max: 0.0,
+    };
+    s1.action = Dist {
+        dist: DistType::Uniform,
+        param1: 1000.0,
+        param2: 1000.0,
+        start: 0.0,
+        max: 0.0,
+    };
+    // 2: send padding every 2us, 3 times
+    let mut t: HashMap<Event, HashMap<usize, f64>> = HashMap::new();
+    let mut e: HashMap<usize, f64> = HashMap::new();
+    e.insert(2, 1.0);
+    t.insert(Event::PaddingSent, e);
+    let mut s2 = State::new(t, num_states);
+    s2.timeout = Dist {
+        dist: DistType::Uniform,
+        param1: 2.0,
+        param2: 2.0,
+        start: 0.0,
+        max: 0.0,
+    };
+    s2.limit = Dist {
+        dist: DistType::Uniform,
+        param1: 3.0,
+        param2: 3.0,
+        start: 0.0,
+        max: 0.0,
+    };
+
+    let mut m = Machine {
+        allowed_padding_bytes: 10000,
+        max_padding_frac: 1.0,
+        allowed_blocked_microsec: 10000,
+        max_blocking_frac: 0.0,
+        states: vec![s0, s1, s2],
+        include_small_packets: true,
+    };
+
+    // client, without any bypass or replace
+    run_test_sim(
+        "0,sn,100 4,sn,200 6,rn,300 6,rn,300 7,sn,500",
+        "0,sn,100 1,bb 6,rn,300 6,rn,300 1001,sp,1420 1001,sn,200 1001,sn,500 1001,be 1003,sp,1420",
+        Duration::from_micros(5),
+        vec![m.clone()],
+        vec![],
+        true,
+        40,
+        false,
+    );
+
+    // client, with bypass
+    m.states[1].bypass = true;
+    m.states[2].bypass = true;
+    run_test_sim(
+        "0,sn,100 4,sn,200 6,rn,300 6,rn,300 7,sn,500",
+        "0,sn,100 1,bb 3,sp,1420 5,sp,1420 6,rn,300 6,rn,300 7,sp,1420 1001,sn,200 1001,sn,500 1001,be",
+        Duration::from_micros(5),
+        vec![m.clone()],
+        vec![],
+        true,
+        40,
+        false,
+    );
+
+    // todo: with replace
 }
