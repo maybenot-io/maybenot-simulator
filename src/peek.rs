@@ -53,12 +53,15 @@ pub fn peek_queue(
     if (peek.client
         && client_blocking
         && client.blocking_bypassable
-        && peek.event.is_event(Event::PaddingSent)
+        // bypassable NonPaddingSent is the result of replaced padding
+        && (peek.event.is_event(Event::PaddingSent) || peek.event.is_event(Event::NonPaddingSent))
         && peek.bypass)
         || (!peek.client
             && server_blocking
             && server.blocking_bypassable
-            && peek.event.is_event(Event::PaddingSent)
+            // bypassable NonPaddingSent is the result of replaced padding
+            && (peek.event.is_event(Event::PaddingSent)
+                || peek.event.is_event(Event::NonPaddingSent))
             && peek.bypass)
     {
         return (peek.time.duration_since(current_time), Some(peek));

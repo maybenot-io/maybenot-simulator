@@ -75,10 +75,11 @@ pub fn sim_network_activity(
                     return false;
                 }
 
-                // can replace with what's queued to be sent within the network
-                // replace window?
-                if let Some((queued, _)) = sq.peek_blocking(state.blocking_bypassable, next.client)
-                {
+                // can replace with nonpadding that's queued to be sent within
+                // the network replace window?
+                let peek = sq.peek_blocking(state.blocking_bypassable, next.client);
+                if peek.is_some() {
+                    let queued = peek.unwrap().0.clone();
                     debug!(
                         "\treplace with queued? {:?} <= {:?}",
                         queued.time.duration_since(next.time),
@@ -88,23 +89,27 @@ pub fn sim_network_activity(
                         && queued.time.duration_since(next.time) <= NETWORK_REPLACE_WINDOW
                     {
                         match queued.event {
-                            TriggerEvent::PaddingSent {
-                                bytes_sent: queued_bytes_sent,
-                                ..
-                            } => {
-                                if queued_bytes_sent == bytes_sent {
-                                    debug!("replacing padding sent with queued padding @{}", side);
-                                    return false;
-                                }
-                            }
                             TriggerEvent::NonPaddingSent {
                                 bytes_sent: queued_bytes_sent,
                             } => {
                                 if queued_bytes_sent == bytes_sent {
                                     debug!(
                                         "replacing padding sent with queued non-padding @{}",
-                                        side
+                                        side,
                                     );
+                                    // let the NonPaddingSent event bypass
+                                    // blocking by making a copy of the eevent
+                                    // with the approproiate flags set
+                                    let mut tmp = queued.clone();
+                                    tmp.bypass = true;
+                                    tmp.replace = false;
+                                    // we send the NonPadding now since it is queued
+                                    tmp.time = next.time;
+                                    // we need to remove and push, because we
+                                    // change flags and potentially time, which
+                                    // changes the priority
+                                    sq.remove(&queued);
+                                    sq.push_sim(tmp.clone(), Reverse(tmp.time));
                                     return false;
                                 }
                             }

@@ -675,6 +675,72 @@ fn test_replace_machine() {
         40,
         true,
     );
+
+    // we make the machine pad once every 1us, and disable replace
+    m.states[1].timeout = Dist {
+        dist: DistType::Uniform,
+        param1: 1.0,
+        param2: 1.0,
+        start: 0.0,
+        max: 0.0,
+    };
+    m.states[1].replace = false;
+    // client machine and client output
+    run_test_sim(
+        "0,sn,100 4,sn,200 6,rn,300 6,rn,300 7,sn,500",
+        "0,sn,100 1,sp,200 2,sp,200 3,sp,200 4,sn,200 4,sp,200 5,sp,200 6,rn,300 6,rn,300 6,sp,200 7,sn,500",
+        Duration::from_micros(5),
+        vec![m.clone()],
+        vec![],
+        true,
+        40,
+        true,
+    );
+    // enable replace again
+    m.states[1].replace = true;
+    // client machine and client output
+    run_test_sim(
+        "0,sn,100 4,sn,200 6,rn,300 6,rn,300 7,sn,500",
+        // padding at 2us is replaced by 1,sp,200
+        // padding at 3us is replaced by 3,sn,200 (sent early from queue)
+        // padding at 4us is replaced by 3,sn,200
+        // padding at 6us is replaced by 5 sp,200
+        "0,sn,100 1,sp,200 3,sn,200 5,sp,200 6,rn,300 6,rn,300 7,sn,500",
+        Duration::from_micros(5),
+        vec![m.clone()],
+        vec![],
+        true,
+        40,
+        true,
+    );
+    m.states[1].timeout = Dist {
+        dist: DistType::Uniform,
+        param1: 0.0,
+        param2: 0.0,
+        start: 0.0,
+        max: 0.0,
+    };
+    // client machine and client output
+    run_test_sim(
+        "0,sn,100 4,sn,200 6,rn,300 6,rn,300 7,sn,500",
+        "0,sn,100 0,sp,200 4,sn,200 6,rn,300 6,rn,300 7,sn,500",
+        Duration::from_micros(5),
+        vec![m.clone()],
+        vec![],
+        true,
+        40,
+        true,
+    );
+    run_test_sim(
+        "0,sn,100 4,sn,200 6,rn,300 6,rn,300 7,sn,500",
+        "0,sn,100 0,sp,200 0,sp,200 0,sp,200 0,sp,200 0,sp,200 0,sp,200 4,sn,200 6,rn,300 6,rn,300 7,sn,500",
+        Duration::from_micros(5),
+        vec![m.clone()],
+        vec![],
+        true,
+        40,
+        false,
+    );
 }
 
 #[test_log::test]
@@ -743,8 +809,8 @@ fn test_bypass_replace_machine() {
 
     // client, without any bypass or replace
     run_test_sim(
-        "0,sn,100 4,sn,200 6,rn,300 6,rn,300 7,sn,500",
-        "0,sn,100 1,bb 6,rn,300 6,rn,300 1001,sp,1420 1001,sn,200 1001,sn,500 1001,be 1003,sp,1420",
+        "0,sn,100 4,sn,1420 6,rn,300 6,rn,300 7,sn,500",
+        "0,sn,100 1,bb 6,rn,300 6,rn,300 1001,sp,1420 1001,sn,1420 1001,sn,500 1001,be 1003,sp,1420",
         Duration::from_micros(5),
         vec![m.clone()],
         vec![],
@@ -757,8 +823,8 @@ fn test_bypass_replace_machine() {
     m.states[1].bypass = true;
     m.states[2].bypass = true;
     run_test_sim(
-        "0,sn,100 4,sn,200 6,rn,300 6,rn,300 7,sn,500",
-        "0,sn,100 1,bb 3,sp,1420 5,sp,1420 6,rn,300 6,rn,300 7,sp,1420 1001,sn,200 1001,sn,500 1001,be",
+        "0,sn,100 4,sn,1420 6,rn,300 6,rn,300 7,sn,500",
+        "0,sn,100 1,bb 3,sp,1420 5,sp,1420 6,rn,300 6,rn,300 7,sp,1420 1001,sn,1420 1001,sn,500 1001,be",
         Duration::from_micros(5),
         vec![m.clone()],
         vec![],
@@ -766,6 +832,119 @@ fn test_bypass_replace_machine() {
         40,
         false,
     );
+    // client, with bypass and only packets on wire
+    run_test_sim(
+        "0,sn,100 4,sn,1420 6,rn,300 6,rn,300 7,sn,500",
+        "0,sn,100 3,sp,1420 5,sp,1420 6,rn,300 6,rn,300 7,sp,1420 1001,sn,1420 1001,sn,500",
+        Duration::from_micros(5),
+        vec![m.clone()],
+        vec![],
+        true,
+        40,
+        true, // NOTE only packets  as-is on the wire
+    );
 
-    // todo: with replace
+    // client, with bypass and replace, only packets on wire
+    m.states[2].replace = true;
+    run_test_sim(
+        "0,sn,1420 4,sn,1420 6,rn,1420 6,rn,1420 7,sn,1420",
+        // sp 3 is replaced by sn 3, then sp at 7 replaced by sn 7
+        "0,sn,1420 3,sn,1420 5,sp,1420 6,rn,1420 6,rn,1420 7,sn,1420",
+        Duration::from_micros(5),
+        vec![m.clone()],
+        vec![],
+        true,
+        40,
+        true, // NOTE only packets as-is on the wire
+    );
+
+    // client, with bypass and replace, events as seen by framework
+    run_test_sim(
+        "0,sn,1420 4,sn,1420 6,rn,1420 6,rn,1420 7,sn,1420",
+        // wuth all events, we also get SP events and blocking events
+        "0,sn,1420 1,bb 3,sp,1420 3,sn,1420 5,sp,1420 6,rn,1420 6,rn,1420 7,sp,1420 7,sn,1420 1001,be",
+        Duration::from_micros(5),
+        vec![m.clone()],
+        vec![],
+        true,
+        40,
+        false, // NOTE false, all events
+    );
+
+    // another important detail: the window is 1us, what about non-padding
+    // packets queued up earlier than that?  They should also replace padding
+    run_test_sim(
+        "0,sn,1420 2,sn,1420 2,sn,1420 6,rn,1420 6,rn,1420 7,sn,1420",
+        "0,sn,1420 3,sn,1420 5,sn,1420 6,rn,1420 6,rn,1420 7,sn,1420",
+        Duration::from_micros(5),
+        vec![m.clone()],
+        vec![],
+        true,
+        40,
+        true, // only packets
+    );
+    run_test_sim(
+        "0,sn,1420 2,sn,1420 2,sn,1420 6,rn,1420 6,rn,1420 7,sn,1420",
+        // wuth all events, we also get SP events and blocking events
+        "0,sn,1420 1,bb 3,sp,1420 3,sn,1420 5,sp,1420 5,sn,1420 6,rn,1420 6,rn,1420 7,sp,1420 7,sn,1420 1001,be",
+        Duration::from_micros(5),
+        vec![m.clone()],
+        vec![],
+        true,
+        40,
+        false, // all events
+    );
+
+    // same as above, we just queue up more packets: note that the machine above
+    // only does 3 padding packets due to limit
+    run_test_sim(
+        "0,sn,1420 2,sn,1420 2,sn,1420 2,sn,1420 2,sn,1420 6,rn,1420 6,rn,1420 7,sn,1420",
+        "0,sn,1420 3,sn,1420 5,sn,1420 6,rn,1420 6,rn,1420 7,sn,1420 1001,sn,1420 1001,sn,1420",
+        Duration::from_micros(5),
+        vec![m.clone()],
+        vec![],
+        true,
+        40,
+        true, // only packets
+    );
+    // bump the limit to 5
+    m.states[2].limit = Dist {
+        dist: DistType::Uniform,
+        param1: 5.0,
+        param2: 5.0,
+        start: 0.0,
+        max: 0.0,
+    };
+    run_test_sim(
+        "0,sn,1420 2,sn,1420 2,sn,1420 2,sn,1420 2,sn,1420 6,rn,1420 6,rn,1420 7,sn,1420",
+        "0,sn,1420 3,sn,1420 5,sn,1420 6,rn,1420 6,rn,1420 7,sn,1420 9,sn,1420 11,sn,1420",
+        Duration::from_micros(5),
+        vec![m.clone()],
+        vec![],
+        true,
+        40,
+        true, // only packets
+    );
+
+    // we've been lazy so far, not checking the server
+    run_test_sim(
+        "0,sn,1420 2,sn,1420 2,sn,1420 2,sn,1420 2,sn,1420 6,rn,1420 6,rn,1420 7,sn,1420",
+        "1,sn,1420 1,sn,1420 5,rn,1420 8,rn,1420 10,rn,1420 12,rn,1420 14,rn,1420 16,rn,1420",
+        Duration::from_micros(5),
+        vec![m.clone()],
+        vec![],
+        false, // server
+        40,
+        true, // only packets
+    );
+    run_test_sim(
+        "0,sn,1420 2,sn,1420 2,sn,1420 2,sn,1420 2,sn,1420 6,rn,1420 6,rn,1420 7,sn,1420",
+        "1,sn,1420 1,sn,1420 5,rn,1420 8,rn,1420 10,rn,1420 12,rn,1420 14,rn,1420 16,rn,1420",
+        Duration::from_micros(5),
+        vec![m.clone()],
+        vec![],
+        false, // server
+        40,
+        false, // all events
+    );
 }
