@@ -147,7 +147,7 @@ pub struct SimEvent {
 
 /// ScheduledAction represents an action that is scheduled to be executed at a
 /// certain time.
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct ScheduledAction {
     action: Option<Action>,
     time: Instant,
@@ -219,10 +219,10 @@ pub fn sim(
     let mut current_time = sq.peek().unwrap().0.time;
 
     // the client and server states
-    let mut client = SimState::new(machines_client.clone(), current_time);
-    let mut server = SimState::new(machines_server.clone(), current_time);
+    let mut client = SimState::new(machines_client, current_time);
+    let mut server = SimState::new(machines_server, current_time);
 
-    let start_time = current_time.clone();
+    let start_time = current_time;
     while let Some(next) = pick_next(sq, &mut client, &mut server, current_time) {
         debug!("#########################################################");
         debug!("sim(): main loop start, moving time forward");
@@ -262,12 +262,11 @@ pub fn sim(
         // in other words, where we simulate sending packets. The only place
         // where the simulator simulates the entire network between the client
         // and the server. TODO: make delay/network more realistic.
-        let network_activity: bool;
-        if next.client {
-            network_activity = sim_network_activity(&next, sq, &client, current_time, delay);
+        let network_activity = if next.client {
+            sim_network_activity(&next, sq, &client, current_time, delay)
         } else {
-            network_activity = sim_network_activity(&next, sq, &server, current_time, delay);
-        }
+            sim_network_activity(&next, sq, &server, current_time, delay)
+        };
 
         if network_activity {
             // update last packet stats in state
@@ -293,7 +292,7 @@ pub fn sim(
                 &mut client.framework,
                 &mut client.scheduled_action,
                 &next,
-                &mut current_time,
+                &current_time,
             );
         } else {
             debug!("sim(): trigger @server framework\n{:#?}", next.event);
@@ -301,13 +300,13 @@ pub fn sim(
                 &mut server.framework,
                 &mut server.scheduled_action,
                 &next,
-                &mut current_time,
+                &current_time,
             );
         }
 
         // save results if either we should collect everything or if we had
         // network activity
-        if !only_network_activity || (only_network_activity && network_activity) {
+        if !only_network_activity || network_activity {
             trace.push(next);
         }
         if max_trace_length > 0 && trace.len() >= max_trace_length {
@@ -353,7 +352,7 @@ fn pick_next(
     // bulk trigger events in the framework.
     if q <= s && q <= b {
         debug!("\tpick_next(): picked queue");
-        sq.remove(&q_peek.as_ref().unwrap());
+        sq.remove(q_peek.as_ref().unwrap());
 
         // check if blocking moves the event forward in time
         let mut tmp = q_peek.unwrap();
@@ -370,19 +369,19 @@ fn pick_next(
         // create SimEvent and move blocking into (what soon will be) the past
         // to indicate that it has been processed
         let time: Instant;
-        let client_earliest;
-        if client.blocking_until >= current_time && server.blocking_until >= current_time {
-            client_earliest = client.blocking_until <= server.blocking_until;
-        } else {
-            client_earliest = client.blocking_until >= current_time;
-        }
+        let client_earliest =
+            if client.blocking_until >= current_time && server.blocking_until >= current_time {
+                client.blocking_until <= server.blocking_until
+            } else {
+                client.blocking_until >= current_time
+            };
 
         if client_earliest {
-            time = client.blocking_until.clone();
-            client.blocking_until = client.blocking_until - Duration::from_micros(1);
+            time = client.blocking_until;
+            client.blocking_until -= Duration::from_micros(1);
         } else {
-            time = server.blocking_until.clone();
-            server.blocking_until = server.blocking_until - Duration::from_micros(1);
+            time = server.blocking_until;
+            server.blocking_until -= Duration::from_micros(1);
         }
 
         return Some(SimEvent {
@@ -400,8 +399,8 @@ fn pick_next(
     debug!("\tpick_next(): picked scheduled");
     let target = current_time + s;
     let act = do_scheduled(client, server, current_time, target);
-    if act.is_some() {
-        sq.push_sim(act.unwrap(), Reverse(current_time));
+    if let Some(a) = act {
+        sq.push_sim(a, Reverse(current_time));
     }
     pick_next(sq, client, server, current_time)
 }
@@ -515,7 +514,7 @@ fn trigger_update(
                     *machine,
                     ScheduledAction {
                         action: Some(action.clone()),
-                        time: current_time.clone(),
+                        time: *current_time,
                     },
                 );
             }
@@ -569,7 +568,7 @@ pub fn parse_trace(trace: &str, delay: Duration) -> SimQueue {
     let starting_time = Instant::now();
 
     for l in trace.lines() {
-        let parts: Vec<&str> = l.split(",").collect();
+        let parts: Vec<&str> = l.split(',').collect();
         if parts.len() == 3 {
             let timestamp =
                 starting_time + Duration::from_nanos(parts[0].trim().parse::<u64>().unwrap());

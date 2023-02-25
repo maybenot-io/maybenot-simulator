@@ -17,7 +17,7 @@ pub fn peek_queue(
     current_time: Instant,
 ) -> (Duration, Option<SimEvent>) {
     // easy: no queue to consider
-    if sq.len() == 0 {
+    if sq.is_empty() {
         return (Duration::MAX, None);
     }
     let peek = sq.peek().unwrap().0.clone();
@@ -104,14 +104,12 @@ pub fn peek_queue_earliest_side(
     // OK, bummer, we have to peek for the next blocking and nonblocking: note
     // that this takes into account if blocking is bypassable or not, picking the
     // earliest next event from the queue.
-    let peek_blocking = match sq.peek_blocking(blocking_bypassable, is_client) {
-        Some((e, _)) => Some(e.clone()),
-        None => None,
-    };
-    let peek_nonblocking = match sq.peek_nonblocking(blocking_bypassable, is_client) {
-        Some((e, _)) => Some(e.clone()),
-        None => None,
-    };
+    let peek_blocking = sq
+        .peek_blocking(blocking_bypassable, is_client)
+        .map(|(e, _)| e.clone());
+    let peek_nonblocking = sq
+        .peek_nonblocking(blocking_bypassable, is_client)
+        .map(|(e, _)| e.clone());
 
     // easy: no events to consider
     if peek_blocking.is_none() && peek_nonblocking.is_none() {
@@ -145,12 +143,12 @@ pub fn peek_queue_earliest_side(
     let pb = peek_blocking.as_ref().unwrap();
     let pn = peek_nonblocking.as_ref().unwrap();
     if pb.time.max(*blocking_until) <= pn.time {
-        return (
+        (
             pb.time.max(*blocking_until).duration_since(current_time),
             peek_blocking,
-        );
+        )
     } else {
-        return (pn.time.duration_since(current_time), peek_nonblocking);
+        (pn.time.duration_since(current_time), peek_nonblocking)
     }
 }
 
@@ -163,18 +161,20 @@ pub fn peek_scheduled(
     // iterate over all of them quickly
     let mut earliest = Duration::MAX;
 
-    for (_, a) in scheduled_c {
-        if a.action.is_some() && a.time >= current_time {
-            if a.time.duration_since(current_time) < earliest {
-                earliest = a.time.duration_since(current_time);
-            }
+    for a in scheduled_c.values() {
+        if a.action.is_some()
+            && a.time >= current_time
+            && a.time.duration_since(current_time) < earliest
+        {
+            earliest = a.time.duration_since(current_time);
         }
     }
-    for (_, a) in scheduled_s {
-        if a.action.is_some() && a.time >= current_time {
-            if a.time.duration_since(current_time) < earliest {
-                earliest = a.time.duration_since(current_time);
-            }
+    for a in scheduled_s.values() {
+        if a.action.is_some()
+            && a.time >= current_time
+            && a.time.duration_since(current_time) < earliest
+        {
+            earliest = a.time.duration_since(current_time);
         }
     }
 

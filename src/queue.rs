@@ -17,6 +17,12 @@ pub struct SimQueue {
     server: EventQueue,
 }
 
+impl Default for SimQueue {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SimQueue {
     pub fn new() -> SimQueue {
         SimQueue {
@@ -27,6 +33,10 @@ impl SimQueue {
 
     pub fn len(&self) -> usize {
         self.client.len() + self.server.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     pub fn push(
