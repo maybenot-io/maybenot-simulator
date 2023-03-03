@@ -154,9 +154,9 @@ pub struct ScheduledAction {
 }
 
 /// The state of the client or the server in the simulator.
-pub struct SimState {
+pub struct SimState<'a> {
     /// an instance of the Maybenot framework
-    framework: Framework,
+    framework: Framework<'a>,
     /// scheduled actions (timers)
     scheduled_action: HashMap<MachineId, ScheduledAction>,
     /// blocking time (active if in the future, relative to current_time)
@@ -169,8 +169,8 @@ pub struct SimState {
     last_sent_size: u16,
 }
 
-impl SimState {
-    pub fn new(machines: Vec<Machine>, current_time: Instant) -> Self {
+impl<'a> SimState<'a> {
+    pub fn new(machines: &'a [Machine], current_time: Instant) -> Self {
         Self {
             framework: Framework::new(machines, 0.0, 0.0, 1420, current_time).unwrap(),
             scheduled_action: HashMap::new(),
@@ -219,8 +219,8 @@ pub fn sim(
     let mut current_time = sq.peek().unwrap().0.time;
 
     // the client and server states
-    let mut client = SimState::new(machines_client, current_time);
-    let mut server = SimState::new(machines_server, current_time);
+    let mut client = SimState::new(&machines_client, current_time);
+    let mut server = SimState::new(&machines_server, current_time);
 
     let start_time = current_time;
     while let Some(next) = pick_next(sq, &mut client, &mut server, current_time) {
