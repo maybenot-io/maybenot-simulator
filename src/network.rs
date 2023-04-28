@@ -7,7 +7,7 @@ use std::{
 };
 
 use log::debug;
-use maybenot::{event::Event, framework::TriggerEvent};
+use maybenot::{event::Event, framework::TriggerEvent, machine::Machine};
 
 use crate::{queue::SimQueue, SimEvent, SimState};
 
@@ -22,10 +22,10 @@ const NETWORK_REPLACE_WINDOW: Duration = Duration::from_micros(1);
 // only place where the simulator simulates the entire network between the
 // client and the server. Returns true if a (non-)padding packet was sent or
 // received (i.e., there was network activity), false otherwise.
-pub fn sim_network_activity(
+pub fn sim_network_activity<M: AsRef<[Machine]>>(
     next: &SimEvent,
     sq: &mut SimQueue,
-    state: &SimState,
+    state: &SimState<M>,
     current_time: Instant,
     delay: Duration,
 ) -> bool {

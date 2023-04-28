@@ -12,6 +12,7 @@ use crate::SimEvent;
 /// EventQueue for the server. The goal is to never have to search through
 /// any of the queues, but to be able to directly access the next event
 /// that is to be processed with as little work as possible.
+#[derive(Debug, Clone)]
 pub struct SimQueue {
     client: EventQueue,
     server: EventQueue,
@@ -159,6 +160,7 @@ fn peak_nonblocking(
 /// 2. blocking_bypassable: events that are blocking, but that MAY be bypassed
 ///    (depending on the type of active blocking).
 /// 3. nonblocking: events that are always not blocking.
+#[derive(Debug, Clone)]
 struct EventQueue {
     blocking: PriorityQueue<SimEvent, Reverse<Instant>>,
     blocking_bypassable: PriorityQueue<SimEvent, Reverse<Instant>>,

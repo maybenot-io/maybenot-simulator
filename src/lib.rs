@@ -154,9 +154,9 @@ pub struct ScheduledAction {
 }
 
 /// The state of the client or the server in the simulator.
-pub struct SimState<'a> {
+pub struct SimState<M> {
     /// an instance of the Maybenot framework
-    framework: Framework<'a>,
+    framework: Framework<M>,
     /// scheduled actions (timers)
     scheduled_action: HashMap<MachineId, ScheduledAction>,
     /// blocking time (active if in the future, relative to current_time)
@@ -169,16 +169,21 @@ pub struct SimState<'a> {
     last_sent_size: u16,
 }
 
-impl<'a> SimState<'a> {
-    pub fn new(machines: &'a [Machine], current_time: Instant) -> Self {
+impl<M> SimState<M>
+where
+    M: AsRef<[Machine]>,
+{
+    pub fn new(machines: M, current_time: Instant) -> Self {
         Self {
             framework: Framework::new(machines, 0.0, 0.0, 1420, current_time).unwrap(),
             scheduled_action: HashMap::new(),
             // has to be in the past
-            blocking_until: current_time - Duration::from_micros(1),
+            blocking_until: current_time.checked_sub(Duration::from_micros(1)).unwrap(),
             blocking_bypassable: false,
             // has to be far in the past
-            last_sent_time: current_time - Duration::from_millis(1000),
+            last_sent_time: current_time
+                .checked_sub(Duration::from_millis(1000))
+                .unwrap(),
             last_sent_size: 0,
         }
     }
@@ -323,10 +328,10 @@ pub fn sim(
     trace
 }
 
-fn pick_next(
+fn pick_next<M: AsRef<[Machine]>>(
     sq: &mut SimQueue,
-    client: &mut SimState,
-    server: &mut SimState,
+    client: &mut SimState<M>,
+    server: &mut SimState<M>,
     current_time: Instant,
 ) -> Option<SimEvent> {
     // find the earliest scheduled, blocked, and queued events to determine the
@@ -405,9 +410,9 @@ fn pick_next(
     pick_next(sq, client, server, current_time)
 }
 
-fn do_scheduled(
-    client: &mut SimState,
-    server: &mut SimState,
+fn do_scheduled<M: AsRef<[Machine]>>(
+    client: &mut SimState<M>,
+    server: &mut SimState<M>,
     current_time: Instant,
     target: Instant,
 ) -> Option<SimEvent> {
@@ -500,8 +505,8 @@ fn do_scheduled(
     }
 }
 
-fn trigger_update(
-    f: &mut Framework,
+fn trigger_update<M: AsRef<[Machine]>>(
+    f: &mut Framework<M>,
     actions: &mut HashMap<MachineId, ScheduledAction>,
     next: &SimEvent,
     current_time: &Instant,
@@ -588,7 +593,7 @@ pub fn parse_trace(trace: &str, delay: Duration) -> SimQueue {
                 }
                 "r" => {
                     // sent by server delay time ago
-                    let sent = timestamp - delay;
+                    let sent = timestamp.checked_sub(delay).unwrap();
                     sq.push(
                         TriggerEvent::NonPaddingSent {
                             bytes_sent: size as u16,
