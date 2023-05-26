@@ -1,5 +1,5 @@
 use log::debug;
-use maybenot_simulator::{queue::SimQueue, sim, SimEvent};
+use maybenot_simulator::{parse_trace, queue::SimQueue, sim, SimEvent};
 
 use std::{
     cmp::Reverse,
@@ -947,4 +947,43 @@ fn test_bypass_replace_machine() {
         40,
         false, // all events
     );
+}
+
+#[test_log::test]
+fn test_excessive_sim_delay() {
+    const EARLY_TRACE: &str = include_str!("EARLY_TEST_TRACE.log");
+
+    // start with a reasonable 10ms delay: we should get events at the client
+    let delay: Duration = Duration::from_millis(10);
+    let pq = parse_trace(EARLY_TRACE, delay);
+    let trace = sim(&[], &[], &mut pq.clone(), delay, 10000, true);
+    let client_trace = trace
+        .clone()
+        .into_iter()
+        .filter(|t| t.client)
+        .collect::<Vec<_>>();
+    assert!(client_trace.len() > 0);
+
+    // set a silly delay of 10s: this should result in zero events at the
+    // client, because we hit the limit of events below before we get to the
+    // first event at the client
+    let delay: Duration = Duration::from_millis(10000);
+    let pq = parse_trace(EARLY_TRACE, delay);
+    let trace = sim(&[], &[], &mut pq.clone(), delay, 10000, true);
+    let client_trace = trace
+        .clone()
+        .into_iter()
+        .filter(|t| t.client)
+        .collect::<Vec<_>>();
+    assert!(client_trace.len() == 0);
+
+    // increase the limit of events to 100000: this should result in all events
+    let trace = sim(&[], &[], &mut pq.clone(), delay, 100000, true);
+    let client_trace = trace
+        .clone()
+        .into_iter()
+        .filter(|t| t.client)
+        .collect::<Vec<_>>();
+    // 21574 is the number of events in EARLY_TRACE
+    assert_eq!(client_trace.len(), 21574);
 }
