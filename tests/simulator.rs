@@ -701,11 +701,11 @@ fn test_replace_machine() {
     // client machine and client output
     run_test_sim(
         "0,sn,100 4,sn,200 6,rn,300 6,rn,300 7,sn,500",
-        // padding at 2us is replaced by 1,sp,200
-        // padding at 3us is replaced by 3,sn,200 (sent early from queue)
-        // padding at 4us is replaced by 3,sn,200
-        // padding at 6us is replaced by 5 sp,200
-        "0,sn,100 1,sp,200 3,sn,200 5,sp,200 6,rn,300 6,rn,300 7,sn,500",
+        // padding at 1us is replaced by 0,sn,200
+        // padding at 3us is replaced by 2,sn,200
+        // padding at 4us is replaced by 4,sn,200
+        // padding at 5us is replaced by 4,sn,200
+        "0,sn,100 2,sp,200 4,sn,200 6,rn,300 6,rn,300 6,sp,200 7,sn,500",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -723,7 +723,7 @@ fn test_replace_machine() {
     // client machine and client output
     run_test_sim(
         "0,sn,100 4,sn,200 6,rn,300 6,rn,300 7,sn,500",
-        "0,sn,100 0,sp,200 4,sn,200 6,rn,300 6,rn,300 7,sn,500",
+        "0,sn,100 4,sn,200 6,rn,300 6,rn,300 7,sn,500",
         Duration::from_micros(5),
         &[m.clone()],
         &[],

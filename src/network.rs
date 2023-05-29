@@ -53,12 +53,12 @@ pub fn sim_network_activity<M: AsRef<[Machine]>>(
                 // This is where it gets tricky: we MAY replace the padding with
                 // existing padding or non-padding already queued (or about to
                 // be queued up). The behavior here is tricky, since it'll
-                // differ how different implementations handle it. We take a
-                // conservative approach here and do not consider looking for
-                // non-padding of a smaller size (that could be padded up to the
-                // size of the padding we're about to send). Note that replacing
-                // is the same as skipping to queue the padding recv event
-                // below.
+                // differ how different implementations handle it. When
+                // replacing, we allow bytes of equal or less size, without
+                // adjusting/compensating for the size difference. This is to
+                // allow easy constant-rate defenses accounting for
+                // variable-size packets. Note that replacing is the same as
+                // skipping to queue the padding recv event below.
 
                 // check if we can replace with last sent up to the network
                 // replace window: this probably poorly simulates an egress
@@ -69,7 +69,7 @@ pub fn sim_network_activity<M: AsRef<[Machine]>>(
                     NETWORK_REPLACE_WINDOW
                 );
                 if next.time.duration_since(state.last_sent_time) <= NETWORK_REPLACE_WINDOW
-                    && state.last_sent_size == bytes_sent
+                    && state.last_sent_size <= bytes_sent
                 {
                     debug!("replacing padding sent with last sent @{}", side);
                     return false;
@@ -92,7 +92,7 @@ pub fn sim_network_activity<M: AsRef<[Machine]>>(
                             bytes_sent: queued_bytes_sent,
                         } = queued.event
                         {
-                            if queued_bytes_sent == bytes_sent {
+                            if queued_bytes_sent <= bytes_sent {
                                 debug!("replacing padding sent with queued non-padding @{}", side,);
                                 // let the NonPaddingSent event bypass
                                 // blocking by making a copy of the eevent
