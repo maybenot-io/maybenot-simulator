@@ -173,9 +173,21 @@ impl<M> SimState<M>
 where
     M: AsRef<[Machine]>,
 {
-    pub fn new(machines: M, current_time: Instant) -> Self {
+    pub fn new(
+        machines: M,
+        current_time: Instant,
+        max_padding_frac: f64,
+        max_blocking_frac: f64,
+    ) -> Self {
         Self {
-            framework: Framework::new(machines, 0.0, 0.0, 1420, current_time).unwrap(),
+            framework: Framework::new(
+                machines,
+                max_padding_frac,
+                max_blocking_frac,
+                1420,
+                current_time,
+            )
+            .unwrap(),
             scheduled_action: HashMap::new(),
             // has to be in the past
             blocking_until: current_time.checked_sub(Duration::from_micros(1)).unwrap(),
@@ -217,6 +229,34 @@ pub fn sim(
     max_trace_length: usize,
     only_network_activity: bool,
 ) -> Vec<SimEvent> {
+    sim_with_fracs(
+        machines_client,
+        machines_server,
+        sq,
+        delay,
+        max_trace_length,
+        only_network_activity,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+    )
+}
+
+/// Like [`sim`], but allows to set the maximum padding and blocking fractions
+/// for the client and server.
+pub fn sim_with_fracs(
+    machines_client: &[Machine],
+    machines_server: &[Machine],
+    sq: &mut SimQueue,
+    delay: Duration,
+    max_trace_length: usize,
+    only_network_activity: bool,
+    max_padding_frac_client: f64,
+    max_blocking_frac_client: f64,
+    max_padding_frac_server: f64,
+    max_blocking_frac_server: f64,
+) -> Vec<SimEvent> {
     // the resulting simulated trace
     let mut trace: Vec<SimEvent> = vec![];
 
@@ -224,8 +264,18 @@ pub fn sim(
     let mut current_time = sq.peek().unwrap().0.time;
 
     // the client and server states
-    let mut client = SimState::new(&machines_client, current_time);
-    let mut server = SimState::new(&machines_server, current_time);
+    let mut client = SimState::new(
+        &machines_client,
+        current_time,
+        max_padding_frac_client,
+        max_blocking_frac_client,
+    );
+    let mut server = SimState::new(
+        &machines_server,
+        current_time,
+        max_padding_frac_server,
+        max_blocking_frac_server,
+    );
 
     let start_time = current_time;
     while let Some(next) = pick_next(sq, &mut client, &mut server, current_time) {
