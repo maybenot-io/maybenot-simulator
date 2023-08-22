@@ -215,7 +215,8 @@ where
 /// events have been *simulated* by the simulator and added to the simulating
 /// output trace. Note that some machines may schedule infinite actions (e.g.,
 /// schedule new padding after sending padding), so the simulator may never
-/// stop.
+/// stop. Use [`sim_advanced`] to set the maximum number of iterations to run
+/// the simulator for and other advanced settings.
 ///
 /// If only_network_activity is true, the simulator will only append events that
 /// are related to network activity (i.e., packets sent and received) to the
@@ -229,12 +230,14 @@ pub fn sim(
     max_trace_length: usize,
     only_network_activity: bool,
 ) -> Vec<SimEvent> {
-    sim_with_fracs(
+    sim_advanced(
         machines_client,
         machines_server,
         sq,
         delay,
         max_trace_length,
+        0,
+        false,
         only_network_activity,
         0.0,
         0.0,
@@ -243,14 +246,17 @@ pub fn sim(
     )
 }
 
-/// Like [`sim`], but allows to set the maximum padding and blocking fractions
-/// for the client and server.
-pub fn sim_with_fracs(
+/// Like [`sim`], but allows to (i) set the maximum padding and blocking
+/// fractions for the client and server, (ii) specify the maximum number of
+/// iterations to run the simulator for, and (iii) only returning client events.
+pub fn sim_advanced(
     machines_client: &[Machine],
     machines_server: &[Machine],
     sq: &mut SimQueue,
     delay: Duration,
     max_trace_length: usize,
+    max_sim_iterations: usize,
+    only_client_events: bool,
     only_network_activity: bool,
     max_padding_frac_client: f64,
     max_blocking_frac_client: f64,
@@ -277,6 +283,7 @@ pub fn sim_with_fracs(
         max_blocking_frac_server,
     );
 
+    let mut sim_iterations = 0;
     let start_time = current_time;
     while let Some(next) = pick_next(sq, &mut client, &mut server, current_time) {
         debug!("#########################################################");
@@ -359,15 +366,26 @@ pub fn sim_with_fracs(
             );
         }
 
-        // save results if either we should collect everything or if we had
-        // network activity
-        if !only_network_activity || network_activity {
+        // conditional save to resulting trace: only on network activity if set
+        // in fn arg, and only on client activity if set in fn arg
+        if (!only_network_activity || network_activity) && (!only_client_events || next.client) {
             trace.push(next);
         }
+
         if max_trace_length > 0 && trace.len() >= max_trace_length {
             debug!(
                 "sim(): we done, reached max trace length {}",
                 max_trace_length
+            );
+            break;
+        }
+
+        // check if we should stop
+        sim_iterations += 1;
+        if max_sim_iterations > 0 && sim_iterations >= max_sim_iterations {
+            debug!(
+                "sim(): we done, reached max sim iterations {}",
+                max_sim_iterations
             );
             break;
         }
