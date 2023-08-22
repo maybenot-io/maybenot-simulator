@@ -230,20 +230,38 @@ pub fn sim(
     max_trace_length: usize,
     only_network_activity: bool,
 ) -> Vec<SimEvent> {
-    sim_advanced(
-        machines_client,
-        machines_server,
-        sq,
-        delay,
-        max_trace_length,
-        0,
-        false,
-        only_network_activity,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-    )
+    let args = SimulatorArgs::new(delay, max_trace_length, only_network_activity);
+    sim_advanced(machines_client, machines_server, sq, args)
+}
+
+/// Arguments for [`sim_advanced`].
+#[derive(Clone, Debug)]
+pub struct SimulatorArgs {
+    pub delay: Duration,
+    pub max_trace_length: usize,
+    pub max_sim_iterations: usize,
+    pub only_client_events: bool,
+    pub only_network_activity: bool,
+    pub max_padding_frac_client: f64,
+    pub max_blocking_frac_client: f64,
+    pub max_padding_frac_server: f64,
+    pub max_blocking_frac_server: f64,
+}
+
+impl SimulatorArgs {
+    pub fn new(delay: Duration, max_trace_length: usize, only_network_activity: bool) -> Self {
+        Self {
+            delay,
+            max_trace_length,
+            max_sim_iterations: 0,
+            only_client_events: false,
+            only_network_activity,
+            max_padding_frac_client: 0.0,
+            max_blocking_frac_client: 0.0,
+            max_padding_frac_server: 0.0,
+            max_blocking_frac_server: 0.0,
+        }
+    }
 }
 
 /// Like [`sim`], but allows to (i) set the maximum padding and blocking
@@ -253,15 +271,7 @@ pub fn sim_advanced(
     machines_client: &[Machine],
     machines_server: &[Machine],
     sq: &mut SimQueue,
-    delay: Duration,
-    max_trace_length: usize,
-    max_sim_iterations: usize,
-    only_client_events: bool,
-    only_network_activity: bool,
-    max_padding_frac_client: f64,
-    max_blocking_frac_client: f64,
-    max_padding_frac_server: f64,
-    max_blocking_frac_server: f64,
+    args: SimulatorArgs,
 ) -> Vec<SimEvent> {
     // the resulting simulated trace
     let mut trace: Vec<SimEvent> = vec![];
@@ -271,16 +281,16 @@ pub fn sim_advanced(
 
     // the client and server states
     let mut client = SimState::new(
-        &machines_client,
+        machines_client,
         current_time,
-        max_padding_frac_client,
-        max_blocking_frac_client,
+        args.max_padding_frac_client,
+        args.max_blocking_frac_client,
     );
     let mut server = SimState::new(
-        &machines_server,
+        machines_server,
         current_time,
-        max_padding_frac_server,
-        max_blocking_frac_server,
+        args.max_padding_frac_server,
+        args.max_blocking_frac_server,
     );
 
     let mut sim_iterations = 0;
@@ -325,9 +335,9 @@ pub fn sim_advanced(
         // where the simulator simulates the entire network between the client
         // and the server. TODO: make delay/network more realistic.
         let network_activity = if next.client {
-            sim_network_activity(&next, sq, &client, current_time, delay)
+            sim_network_activity(&next, sq, &client, current_time, args.delay)
         } else {
-            sim_network_activity(&next, sq, &server, current_time, delay)
+            sim_network_activity(&next, sq, &server, current_time, args.delay)
         };
 
         if network_activity {
@@ -368,24 +378,26 @@ pub fn sim_advanced(
 
         // conditional save to resulting trace: only on network activity if set
         // in fn arg, and only on client activity if set in fn arg
-        if (!only_network_activity || network_activity) && (!only_client_events || next.client) {
+        if (!args.only_network_activity || network_activity)
+            && (!args.only_client_events || next.client)
+        {
             trace.push(next);
         }
 
-        if max_trace_length > 0 && trace.len() >= max_trace_length {
+        if args.max_trace_length > 0 && trace.len() >= args.max_trace_length {
             debug!(
                 "sim(): we done, reached max trace length {}",
-                max_trace_length
+                args.max_trace_length
             );
             break;
         }
 
         // check if we should stop
         sim_iterations += 1;
-        if max_sim_iterations > 0 && sim_iterations >= max_sim_iterations {
+        if args.max_sim_iterations > 0 && sim_iterations >= args.max_sim_iterations {
             debug!(
                 "sim(): we done, reached max sim iterations {}",
-                max_sim_iterations
+                args.max_sim_iterations
             );
             break;
         }
