@@ -231,7 +231,7 @@ pub fn sim(
     only_network_activity: bool,
 ) -> Vec<SimEvent> {
     let args = SimulatorArgs::new(delay, max_trace_length, only_network_activity);
-    sim_advanced(machines_client, machines_server, sq, args)
+    sim_advanced(machines_client, machines_server, sq, &args)
 }
 
 /// Arguments for [`sim_advanced`].
@@ -271,7 +271,7 @@ pub fn sim_advanced(
     machines_client: &[Machine],
     machines_server: &[Machine],
     sq: &mut SimQueue,
-    args: SimulatorArgs,
+    args: &SimulatorArgs,
 ) -> Vec<SimEvent> {
     // the resulting simulated trace
     let mut trace: Vec<SimEvent> = vec![];
