@@ -45,7 +45,7 @@ let m = Machine::from_str(m).unwrap();
 
 // Run the simulator with the machine at the client. Run the simulation up
 // until 100 packets have been recorded (total, client and server).
-let trace = sim(vec![m], vec![], &mut input_trace, delay, 100, true);
+let trace = sim(&[m], &[], &mut input_trace, delay, 100, true);
 
 // print packets from the client's perspective
 let starting_time = trace[0].time;
