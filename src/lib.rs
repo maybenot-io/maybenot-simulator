@@ -178,13 +178,14 @@ where
         current_time: Instant,
         max_padding_frac: f64,
         max_blocking_frac: f64,
+        mtu: u16,
     ) -> Self {
         Self {
             framework: Framework::new(
                 machines,
                 max_padding_frac,
                 max_blocking_frac,
-                1420,
+                mtu,
                 current_time,
             )
             .unwrap(),
@@ -246,6 +247,7 @@ pub struct SimulatorArgs {
     pub max_blocking_frac_client: f64,
     pub max_padding_frac_server: f64,
     pub max_blocking_frac_server: f64,
+    pub mtu: u16,
 }
 
 impl SimulatorArgs {
@@ -260,6 +262,8 @@ impl SimulatorArgs {
             max_blocking_frac_client: 0.0,
             max_padding_frac_server: 0.0,
             max_blocking_frac_server: 0.0,
+            // WireGuard default MTU
+            mtu: 1420,
         }
     }
 }
@@ -285,12 +289,14 @@ pub fn sim_advanced(
         current_time,
         args.max_padding_frac_client,
         args.max_blocking_frac_client,
+        args.mtu,
     );
     let mut server = SimState::new(
         machines_server,
         current_time,
         args.max_padding_frac_server,
         args.max_blocking_frac_server,
+        args.mtu,
     );
 
     let mut sim_iterations = 0;
