@@ -3,6 +3,20 @@
 A simulator for the [Maybenot
 framework](https://github.com/maybenot-io/maybenot/).
 
+[![Crates.io][crates-badge]][crates-url]
+[![Documentation][docs-badge]][docs-url]
+[![Build Status][tests-badge]][tests-url]
+[![MIT OR Apache-2.0][license-badge]][license-url]
+
+[crates-badge]: https://img.shields.io/crates/v/maybenot-simulator.svg
+[crates-url]: https://crates.io/crates/maybenot-simulator
+[docs-badge]: https://docs.rs/maybenot-simulator/badge.svg
+[docs-url]: https://docs.rs/maybenot-simulator
+[tests-badge]: https://github.com/maybenot-io/maybenot-simulator/actions/workflows/tests.yml/badge.svg
+[tests-url]: https://github.com/maybenot-io/maybenot-simulator/actions
+[license-badge]: https://img.shields.io/crates/l/maybenot-simulator
+[license-url]: https://github.com/maybenot-io/maybenot-simulator/
+
 ## Example Usage
 See `cargo doc --open` for the API documentation. The following is a simple
 example of how to use the simulator:
@@ -130,11 +144,3 @@ get rich debug output. For example, to run the integration test
 ```
 RUST_LOG=debug cargo test test_bypass_machine
 ```
-
-## Licensing
-We are yet to decide on a license for this code. For now, early access is in
-good faith only. Please do not redistribute this code without permission. Any
-contributions to this code at this point is assumed to be the same as
-transferring ownership of the contributions to Tobias Pulls (to allow maximize
-flexibility for licensing lately once we decide). The simulator will be open
-sourced at some point in the future.
