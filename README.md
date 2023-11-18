@@ -144,3 +144,13 @@ get rich debug output. For example, to run the integration test
 ```
 RUST_LOG=debug cargo test test_bypass_machine
 ```
+
+## Contributing
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+dual licensed as MIT or Apache-2.0, without any additional terms or conditions.
+
+## Sponsorship
+Made possible with support from [Mullvad VPN](https://mullvad.net/), the
+[Swedish Internet Foundation](https://internetstiftelsen.se/en/), and the
+[Knowledge Foundation of Sweden](https://www.kks.se/en/start-en/).
