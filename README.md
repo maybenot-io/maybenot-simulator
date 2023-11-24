@@ -18,7 +18,7 @@ framework](https://github.com/maybenot-io/maybenot/).
 [license-url]: https://github.com/maybenot-io/maybenot-simulator/
 
 ## Example Usage
-See `cargo doc --open` for the API documentation. The following is a simple
+See [cargo docs][docs-url] for details on the API. The following is a simple
 example of how to use the simulator:
 
 ```rust
