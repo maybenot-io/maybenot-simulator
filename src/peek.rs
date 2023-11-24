@@ -94,7 +94,7 @@ pub fn peek_queue<M: AsRef<[Machine]>>(
 
 // Here be dragons: surprisingly annoying function to get right and fast.
 // Closely tied to how SimQueue is implemented.
-pub fn peek_queue_earliest_side(
+fn peek_queue_earliest_side(
     sq: &mut SimQueue,
     blocking_until: &Instant,
     blocking_bypassable: bool,

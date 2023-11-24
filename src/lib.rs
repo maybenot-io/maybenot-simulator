@@ -508,11 +508,13 @@ fn do_scheduled<M: AsRef<[Machine]>>(
         time: current_time,
     };
     let mut a_is_client = false;
+    let mut a_is_found = false;
 
     client.scheduled_action.retain(|&_mi, sa| {
-        if sa.action.is_some() && sa.time == target {
+        if !a_is_found && sa.action.is_some() && sa.time == target {
             a = sa.clone();
             a_is_client = true;
+            a_is_found = true;
             return false;
         };
         true
@@ -521,14 +523,18 @@ fn do_scheduled<M: AsRef<[Machine]>>(
     // cannot schedule a None action, so if we found one, done
     if a.action.is_none() {
         server.scheduled_action.retain(|&_mi, sa| {
-            if sa.action.is_some() && sa.time == target {
+            if !a_is_found && sa.action.is_some() && sa.time == target {
                 a = sa.clone();
                 a_is_client = false;
+                a_is_found = true;
                 return false;
             };
             true
         });
     }
+
+    // no action found
+    assert!(a_is_found, "BUG: no action found");
 
     // do the action
     match a.action? {
