@@ -2,6 +2,10 @@
 
 Manually generated changelog, for now. We follow semantic versioning.
 
+## 1.1.0 - 2024-04-05
+- Support for integration delays.
+- Light networking refactor.
+
 ## 1.0.1 - 2023-11-24
 - Minor README update.
 

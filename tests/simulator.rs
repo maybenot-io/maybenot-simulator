@@ -1,5 +1,5 @@
 use log::debug;
-use maybenot_simulator::{parse_trace, queue::SimQueue, sim, SimEvent};
+use maybenot_simulator::{network::Network, parse_trace, queue::SimQueue, sim, SimEvent};
 
 use std::{
     cmp::Reverse,
@@ -64,6 +64,7 @@ fn fmt_event(e: &SimEvent, base: Instant) -> String {
 
 fn make_sq(s: String, delay: Duration, starting_time: Instant) -> SimQueue {
     let mut sq = SimQueue::new();
+    let integration_delay = Duration::from_micros(0);
 
     // 0,s,100 18,s,200 25,r,300 25,r,300 30,s,500 35,r,600
     let lines: Vec<&str> = s.split(" ").collect();
@@ -82,6 +83,7 @@ fn make_sq(s: String, delay: Duration, starting_time: Instant) -> SimQueue {
                         },
                         true,
                         timestamp,
+                        integration_delay,
                         Reverse(timestamp),
                     );
                 }
@@ -94,6 +96,7 @@ fn make_sq(s: String, delay: Duration, starting_time: Instant) -> SimQueue {
                         },
                         false,
                         sent,
+                        integration_delay,
                         Reverse(sent),
                     );
                 }
@@ -954,9 +957,9 @@ fn test_excessive_sim_delay() {
     const EARLY_TRACE: &str = include_str!("EARLY_TEST_TRACE.log");
 
     // start with a reasonable 10ms delay: we should get events at the client
-    let delay: Duration = Duration::from_millis(10);
-    let pq = parse_trace(EARLY_TRACE, delay);
-    let trace = sim(&[], &[], &mut pq.clone(), delay, 10000, true);
+    let network = Network::new(Duration::from_millis(10));
+    let pq = parse_trace(EARLY_TRACE, &network);
+    let trace = sim(&[], &[], &mut pq.clone(), network.delay, 10000, true);
     let client_trace = trace
         .clone()
         .into_iter()
@@ -967,9 +970,9 @@ fn test_excessive_sim_delay() {
     // set a silly delay of 10s: this should result in zero events at the
     // client, because we hit the limit of events below before we get to the
     // first event at the client
-    let delay: Duration = Duration::from_millis(10000);
-    let pq = parse_trace(EARLY_TRACE, delay);
-    let trace = sim(&[], &[], &mut pq.clone(), delay, 10000, true);
+    let network = Network::new(Duration::from_millis(10000));
+    let pq = parse_trace(EARLY_TRACE, &network);
+    let trace = sim(&[], &[], &mut pq.clone(), network.delay, 10000, true);
     let client_trace = trace
         .clone()
         .into_iter()
@@ -978,7 +981,7 @@ fn test_excessive_sim_delay() {
     assert!(client_trace.len() == 0);
 
     // increase the limit of events to 100000: this should result in all events
-    let trace = sim(&[], &[], &mut pq.clone(), delay, 100000, true);
+    let trace = sim(&[], &[], &mut pq.clone(), network.delay, 100000, true);
     let client_trace = trace
         .clone()
         .into_iter()

@@ -1,6 +1,6 @@
 [package]
 name = "maybenot-simulator"
-version = "1.0.1"
+version = "1.1.0"
 edition = "2021"
 authors = ["Tobias Pulls"]
 license = "MIT OR Apache-2.0"
@@ -18,6 +18,9 @@ maybenot = "1.0.0"
 log = "0.4.20"
 test-log = "0.2.12"
 fastrand = "2.0.0"
+serde = "1.0.193"
+rand = "0.8.5"
+serde_json = "1.0.108"
 
 [dev-dependencies]
 env_logger = "0.10.1"

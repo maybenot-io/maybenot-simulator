@@ -1,5 +1,5 @@
 use maybenot::{framework::TriggerEvent, machine::Machine};
-use maybenot_simulator::{parse_trace, sim};
+use maybenot_simulator::{network::Network, parse_trace, sim};
 use std::{str::FromStr, time::Duration};
 
 #[test_log::test]
@@ -19,15 +19,15 @@ fn simulator_example_use() {
     9401094589,s,73
     9420892765,r,191";
 
-    // The delay between client and server. This is for the simulation of the
-    // network between the client and server
-    let delay = Duration::from_millis(10);
+    // The network model for simulating the network between the client and the
+    // server. Currently just a delay.
+    let network = Network::new(Duration::from_millis(10));
 
     // Parse the raw trace into a queue of events for the simulator. This uses
     // the delay to generate a queue of events at the client and server in such
     // a way that the client is ensured to get the packets in the same order and
     // at the same time as in the raw trace.
-    let mut input_trace = parse_trace(raw_trace, delay);
+    let mut input_trace = parse_trace(raw_trace, &network);
 
     // A simple machine that sends one padding packet of 1000 bytes 20
     // milliseconds after the first NonPaddingSent is sent.
@@ -37,7 +37,7 @@ fn simulator_example_use() {
 
     // Run the simulator with the machine at the client. Run the simulation up
     // until 100 packets have been recorded (total, client and server).
-    let trace = sim(&[m], &[], &mut input_trace, delay, 100, true);
+    let trace = sim(&[m], &[], &mut input_trace, network.delay, 100, true);
 
     // print packets from the client's perspective
     let starting_time = trace[0].time;

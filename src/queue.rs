@@ -1,6 +1,9 @@
 //! The main queue of events in the simulator.
 
-use std::{cmp::Reverse, time::Instant};
+use std::{
+    cmp::Reverse,
+    time::{Duration, Instant},
+};
 
 use maybenot::framework::TriggerEvent;
 use priority_queue::PriorityQueue;
@@ -45,12 +48,14 @@ impl SimQueue {
         event: TriggerEvent,
         is_client: bool,
         time: Instant,
+        delay: Duration,
         priority: Reverse<Instant>,
     ) {
         self.push_sim(
             SimEvent {
                 event,
                 time,
+                delay,
                 client: is_client,
                 bypass: false,
                 replace: false,
