@@ -2,6 +2,9 @@
 
 Manually generated changelog, for now. We follow semantic versioning.
 
+## 1.1.1 - 2024-04-08
+- Update to Maybenot v1.1.0.
+
 ## 1.1.0 - 2024-04-05
 - Support for integration delays.
 - Light networking refactor.
