@@ -1,5 +1,4 @@
-//! For simulating network activity: sending and receiving packets between the
-//! client and server.
+//! For simulating the network stack and network between client and server.
 
 use std::{
     cmp::{max, Reverse},
@@ -7,12 +6,11 @@ use std::{
 };
 
 use log::debug;
-use maybenot::{event::Event, framework::TriggerEvent, machine::Machine};
+use maybenot::{event::Event, event::TriggerEvent, machine::Machine};
 
 use crate::{queue::SimQueue, SimEvent, SimState};
 
-/// A model of the network between the client and server. TODO: make this more
-/// than just a delay.
+/// A model of the network between the client and server.
 #[derive(Debug, Clone)]
 pub struct Network {
     pub delay: Duration,
@@ -29,17 +27,30 @@ impl Network {
 }
 
 /// The network replace window is the time window in which we can replace
-/// padding with existing padding or non-padding already queued (or about to be
-/// queued up). The behavior here is tricky, since it'll differ how different
+/// padding with existing padding or normal packets already queued (or about to
+/// be queued up). The behavior here is tricky, since it'll differ how different
 /// implementations handle it.
 const NETWORK_REPLACE_WINDOW: Duration = Duration::from_micros(1);
 
-// For (non-)padding sent, queue the corresponding padding recv event: in other
-// words, where we simulate sending packets. The block below is actually the
-// only place where the simulator simulates the entire network between the
-// client and the server. Returns true if a (non-)padding packet was sent or
-// received (i.e., there was network activity), false otherwise.
-pub fn sim_network_activity<M: AsRef<[Machine]>>(
+// This is the only place where the simulator simulates the entire network
+// between the client and the server.
+//
+// Queued normal or padding packets create the corresponding sent packet events.
+// Here, we could simulate the egress queue of the network stack. We assume that
+// it is always possible to turn a queued packet into a sent packet, but that
+// sending a packet can be blocked (dealt with by the simulation of blocking in
+// the main loop of the simulator).
+//
+// For sending a normal packet, we queue the corresponding recv event on the
+// other side, simulating the network up until the point where the packet is
+// received. We current do not have a receiver-side queue. TODO?
+//
+// For sending padding, in principle we treat it like a normal packet, but we
+// need to consider the replace flag.
+//
+// Returns true if there was network activity (i.e., a packet was sent or
+// received), false otherwise.
+pub fn sim_network_stack<M: AsRef<[Machine]>>(
     next: &SimEvent,
     sq: &mut SimQueue,
     state: &SimState<M>,
@@ -50,9 +61,42 @@ pub fn sim_network_activity<M: AsRef<[Machine]>>(
     let side = if next.client { "client" } else { "server" }.to_string();
 
     match next.event {
+        // here we simulate the queueing of packets
+        TriggerEvent::NormalQueued => {
+            debug!("\tqueue {}", Event::NormalSent);
+            // TODO: queuing delay
+            sq.push(
+                TriggerEvent::NormalSent,
+                next.client,
+                next.time,
+                next.delay,
+                Reverse(next.time),
+            );
+            false
+        }
+        // here we simulate the queueing of packets
+        TriggerEvent::PaddingQueued { .. } => {
+            debug!("\tqueue {}", Event::PaddingSent);
+            // TODO: queuing delay
+            sq.push_sim(
+                SimEvent {
+                    event: TriggerEvent::PaddingSent,
+                    time: next.time,
+                    delay: next.delay,
+                    client: next.client,
+                    // we need to copy the bypass and replace flags, unlike for
+                    // normal queued above
+                    bypass: next.bypass,
+                    replace: next.replace,
+                    fuzz: next.fuzz,
+                },
+                Reverse(next.time),
+            );
+            false
+        }
         // easy: queue up the recv event on the other side
-        TriggerEvent::NonPaddingSent { bytes_sent } => {
-            debug!("\tqueue {}", Event::NonPaddingRecv);
+        TriggerEvent::NormalSent => {
+            debug!("\tqueue {}", Event::NormalRecv);
             // The time the event was reported to us is in next.time. We have to
             // remove the reporting delay locally, then add a network delay and
             // a reporting delay (at the recipient) for the recipient.
@@ -69,9 +113,7 @@ pub fn sim_network_activity<M: AsRef<[Machine]>>(
                 *current_time,
             );
             sq.push(
-                TriggerEvent::NonPaddingRecv {
-                    bytes_recv: bytes_sent,
-                },
+                TriggerEvent::NormalRecv,
                 !next.client,
                 reported,
                 reporting_delay,
@@ -80,17 +122,14 @@ pub fn sim_network_activity<M: AsRef<[Machine]>>(
 
             true
         }
-        TriggerEvent::PaddingSent { bytes_sent, .. } => {
+        TriggerEvent::PaddingSent => {
             if next.replace {
                 // This is where it gets tricky: we MAY replace the padding with
-                // existing padding or non-padding already queued (or about to
-                // be queued up). The behavior here is tricky, since it'll
-                // differ how different implementations handle it. When
-                // replacing, we allow bytes of equal or less size, without
-                // adjusting/compensating for the size difference. This is to
-                // allow easy constant-rate defenses accounting for
-                // variable-size packets. Note that replacing is the same as
-                // skipping to queue the padding recv event below.
+                // existing padding or a normal packet already queued (or about
+                // to be queued up). The behavior here is tricky, since it'll
+                // differ how different implementations handle it. Note that
+                // replacing is the same as skipping to queue the padding recv
+                // event below.
 
                 // check if we can replace with last sent up to the network
                 // replace window: this probably poorly simulates an egress
@@ -100,15 +139,13 @@ pub fn sim_network_activity<M: AsRef<[Machine]>>(
                     next.time.duration_since(state.last_sent_time),
                     NETWORK_REPLACE_WINDOW
                 );
-                if next.time.duration_since(state.last_sent_time) <= NETWORK_REPLACE_WINDOW
-                    && state.last_sent_size <= bytes_sent
-                {
+                if next.time.duration_since(state.last_sent_time) <= NETWORK_REPLACE_WINDOW {
                     debug!("replacing padding sent with last sent @{}", side);
                     return false;
                 }
 
-                // can replace with nonpadding that's queued to be sent within
-                // the network replace window? FIXME: here be bugs related to
+                // can replace with normal that's queued to be sent within the
+                // network replace window? FIXME: here be bugs related to
                 // integration delays. Once blocking is implemented, this code
                 // needs to be reworked.
                 let peek = sq.peek_blocking(state.blocking_bypassable, next.client);
@@ -121,29 +158,23 @@ pub fn sim_network_activity<M: AsRef<[Machine]>>(
                     );
                     if queued.client == next.client
                         && queued.time.duration_since(next.time) <= NETWORK_REPLACE_WINDOW
+                        && TriggerEvent::NormalSent == queued.event
                     {
-                        if let TriggerEvent::NonPaddingSent {
-                            bytes_sent: queued_bytes_sent,
-                        } = queued.event
-                        {
-                            if queued_bytes_sent <= bytes_sent {
-                                debug!("replacing padding sent with queued non-padding @{}", side,);
-                                // let the NonPaddingSent event bypass
-                                // blocking by making a copy of the event
-                                // with the appropriate flags set
-                                let mut tmp = queued.clone();
-                                tmp.bypass = true;
-                                tmp.replace = false;
-                                // we send the NonPadding now since it is queued
-                                tmp.time = next.time;
-                                // we need to remove and push, because we
-                                // change flags and potentially time, which
-                                // changes the priority
-                                sq.remove(&queued);
-                                sq.push_sim(tmp.clone(), Reverse(tmp.time));
-                                return false;
-                            }
-                        }
+                        debug!("replacing padding sent with queued normal @{}", side,);
+                        // let the NormalSent event bypass
+                        // blocking by making a copy of the event
+                        // with the appropriate flags set
+                        let mut tmp = queued.clone();
+                        tmp.bypass = true;
+                        tmp.replace = false;
+                        // we send the NormalSent now since it is queued
+                        tmp.time = next.time;
+                        // we need to remove and push, because we
+                        // change flags and potentially time, which
+                        // changes the priority
+                        sq.remove(&queued);
+                        sq.push_sim(tmp.clone(), Reverse(tmp.time));
+                        return false;
                     }
                 }
             }
@@ -154,9 +185,7 @@ pub fn sim_network_activity<M: AsRef<[Machine]>>(
             // action delay + network + recipient reporting delay
             let reported = next.time + next.delay + network.sample() + reporting_delay;
             sq.push(
-                TriggerEvent::PaddingRecv {
-                    bytes_recv: bytes_sent,
-                },
+                TriggerEvent::PaddingRecv,
                 !next.client,
                 reported,
                 reporting_delay,
@@ -165,8 +194,9 @@ pub fn sim_network_activity<M: AsRef<[Machine]>>(
 
             true
         }
-        // receiving (non-)padding is receiving a packet
-        TriggerEvent::NonPaddingRecv { .. } | TriggerEvent::PaddingRecv { .. } => true,
+        // receiving a packet is network activity
+        TriggerEvent::NormalRecv | TriggerEvent::PaddingRecv => true,
+        // all other events are not network activity
         _ => false,
     }
 }

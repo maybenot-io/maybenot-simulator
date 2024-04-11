@@ -1,10 +1,11 @@
-use std::{collections::HashMap, time::Duration};
+use std::time::Duration;
 
 use maybenot::{
+    action::Action,
     dist::{Dist, DistType},
     event::Event,
     machine::Machine,
-    state::State,
+    state::{State, Trans},
 };
 use maybenot_simulator::{
     integration::{BinDist, Integration},
@@ -12,31 +13,33 @@ use maybenot_simulator::{
     parse_trace_advanced, sim_advanced, SimEvent, SimulatorArgs,
 };
 
+use enum_map::enum_map;
+
 fn get_test_machine() -> Machine {
     // a simple machine that pads once after 5ms
-    let num_states = 2;
-    let mut t: HashMap<Event, HashMap<usize, f64>> = HashMap::new();
-    let mut e: HashMap<usize, f64> = HashMap::new();
-    e.insert(1, 1.0);
-    t.insert(Event::NonPaddingSent, e);
-    let s0 = State::new(t, num_states);
-    let t: HashMap<Event, HashMap<usize, f64>> = HashMap::new();
-    let mut s1 = State::new(t, num_states);
-    s1.timeout = Dist {
-        dist: DistType::Uniform,
-        param1: 0.0,
-        param2: 0.0,
-        start: 5.0 * 1000.0,
-        max: 0.0,
-    };
-    Machine {
-        allowed_padding_bytes: 10000,
-        max_padding_frac: 1.0,
-        allowed_blocked_microsec: 0,
-        max_blocking_frac: 0.0,
-        states: vec![s0, s1],
-        include_small_packets: true,
-    }
+    let s0 = State::new(enum_map! {
+        Event::NormalQueued => vec![Trans(1, 1.0)],
+        _ => vec![],
+    });
+
+    let mut s1 = State::new(enum_map! {
+        _ => vec![],
+    });
+    s1.action = Some(Action::SendPadding {
+        bypass: false,
+        replace: false,
+        timeout: Dist {
+            dist: DistType::Uniform {
+                low: 0.0,
+                high: 0.0,
+            },
+            start: 5.0 * 1000.0,
+            max: 0.0,
+        },
+        limit: None,
+    });
+
+    Machine::new(0, 0.0, 0, 0.0, vec![s0, s1]).unwrap()
 }
 
 fn run_sim(
