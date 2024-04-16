@@ -7,11 +7,7 @@ use std::{
 };
 
 use maybenot::{
-    action::Action,
-    dist::{Dist, DistType},
-    event::{Event, TriggerEvent},
-    machine::Machine,
-    state::{State, Trans},
+    action::{Action, Timer}, counter::{Counter, CounterUpdate, Operation}, dist::{Dist, DistType}, event::{Event, TriggerEvent}, machine::Machine, state::{State, Trans}
 };
 
 use enum_map::enum_map;
@@ -1029,18 +1025,545 @@ fn test_excessive_sim_delay() {
     assert_eq!(client_trace.len(), 21574);
 }
 
-
 #[test_log::test]
-fn test_timer_action() {
-    // TODO
+fn test_timer_action_basic() {
+    // a machine that starts a timer after sending a packet, and then sends a
+    // packet after the timer ends
+    let s0 = State::new(enum_map! {
+        Event::NormalSent => vec![Trans(1, 1.0)],
+        _ => vec![],
+    });
+    let mut s1 = State::new(enum_map! {
+        Event::TimerBegin => vec![Trans(2, 1.0)],
+        _ => vec![],
+    });
+    s1.action = Some(Action::UpdateTimer {
+        replace: false,
+        duration: Dist {
+            dist: DistType::Uniform {
+                low: 2.0,
+                high: 2.0,
+            },
+            start: 0.0,
+            max: 0.0,
+        },
+        limit: None,
+    });
+    let s2 = State::new(enum_map! {
+        Event::TimerEnd => vec![Trans(3, 1.0)],
+        _ => vec![],
+    });
+    let mut s3 = State::new(enum_map! {
+        _ => vec![],
+    });
+    s3.action = Some(Action::SendPadding {
+        bypass: false,
+        replace: false,
+        timeout: Dist {
+            dist: DistType::Uniform {
+                low: 1.0,
+                high: 1.0,
+            },
+            start: 0.0,
+            max: 0.0,
+        },
+        limit: None,
+    });
+    let m = Machine::new(0, 0.0, 0, 0.0, vec![s0, s1, s2, s3]).unwrap();
+
+    run_test_sim(
+        "0,sn 3,sn 6,rn 6,rn 7,sn",
+        "0,qn 0,sn 0,tb 2,te 3,qn 3,sn 3,qp 3,sp 6,rn 6,rn 7,qn 7,sn",
+        Duration::from_micros(5),
+        &[m.clone()],
+        &[],
+        true,
+        100,
+        false,
+    );
 }
 
 #[test_log::test]
-fn test_cancel_action() {
-    // TODO
+fn test_timer_action_longest() {
+    // a machine that starts a timer after sending a packet, and then sends a
+    // packet after the timer ends
+    let s0 = State::new(enum_map! {
+        Event::NormalSent => vec![Trans(1, 1.0)],
+        _ => vec![],
+    });
+    let mut s1 = State::new(enum_map! {
+        Event::TimerBegin => vec![Trans(2, 1.0)],
+        _ => vec![],
+    });
+    s1.action = Some(Action::UpdateTimer {
+        replace: false,
+        duration: Dist {
+            dist: DistType::Uniform {
+                low: 10.0,
+                high: 10.0,
+            },
+            start: 0.0,
+            max: 0.0,
+        },
+        limit: None,
+    });
+    let mut s2 = State::new(enum_map! {
+        Event::TimerEnd => vec![Trans(3, 1.0)],
+        _ => vec![],
+    });
+    s2.action = Some(Action::UpdateTimer {
+        replace: false,
+        duration: Dist {
+            dist: DistType::Uniform {
+                low: 2.0,
+                high: 2.0,
+            },
+            start: 0.0,
+            max: 0.0,
+        },
+        limit: None,
+    });
+    let mut s3 = State::new(enum_map! {
+        _ => vec![],
+    });
+    s3.action = Some(Action::SendPadding {
+        bypass: false,
+        replace: false,
+        timeout: Dist {
+            dist: DistType::Uniform {
+                low: 1.0,
+                high: 1.0,
+            },
+            start: 0.0,
+            max: 0.0,
+        },
+        limit: None,
+    });
+    let m = Machine::new(0, 0.0, 0, 0.0, vec![s0, s1, s2, s3]).unwrap();
+
+    run_test_sim(
+        "0,sn 3,sn 6,rn 6,rn 7,sn",
+        "0,qn 0,sn 0,tb 3,qn 3,sn 6,rn 6,rn 7,qn 7,sn 10,te 11,qp 11,sp",
+        Duration::from_micros(5),
+        &[m.clone()],
+        &[],
+        true,
+        100,
+        false,
+    );
+}
+
+#[test_log::test]
+fn test_timer_action_replace() {
+    // a machine that starts a timer after sending a packet, and then sends a
+    // packet after the timer ends
+    let s0 = State::new(enum_map! {
+        Event::NormalSent => vec![Trans(1, 1.0)],
+        _ => vec![],
+    });
+    let mut s1 = State::new(enum_map! {
+        Event::TimerBegin => vec![Trans(2, 1.0)],
+        _ => vec![],
+    });
+    s1.action = Some(Action::UpdateTimer {
+        replace: false,
+        duration: Dist {
+            dist: DistType::Uniform {
+                low: 10.0,
+                high: 10.0,
+            },
+            start: 0.0,
+            max: 0.0,
+        },
+        limit: None,
+    });
+    let mut s2 = State::new(enum_map! {
+        Event::TimerEnd => vec![Trans(3, 1.0)],
+        _ => vec![],
+    });
+    s2.action = Some(Action::UpdateTimer {
+        replace: true,
+        duration: Dist {
+            dist: DistType::Uniform {
+                low: 2.0,
+                high: 2.0,
+            },
+            start: 0.0,
+            max: 0.0,
+        },
+        limit: None,
+    });
+    let mut s3 = State::new(enum_map! {
+        _ => vec![],
+    });
+    s3.action = Some(Action::SendPadding {
+        bypass: false,
+        replace: false,
+        timeout: Dist {
+            dist: DistType::Uniform {
+                low: 1.0,
+                high: 1.0,
+            },
+            start: 0.0,
+            max: 0.0,
+        },
+        limit: None,
+    });
+    let m = Machine::new(0, 0.0, 0, 0.0, vec![s0, s1, s2, s3]).unwrap();
+
+    run_test_sim(
+        "0,sn 3,sn 6,rn 6,rn 7,sn",
+        "0,qn 0,sn 0,tb 0,tb 2,te 3,qn 3,sn 3,qp 3,sp 6,rn 6,rn 7,qn 7,sn",
+        Duration::from_micros(5),
+        &[m.clone()],
+        &[],
+        true,
+        100,
+        false,
+    );
+}
+
+#[test_log::test]
+fn test_action_cancel_timer_internal() {
+    // start a padding action, start a timer, then cancel the timer yet observe
+    // the padding
+    let s0 = State::new(enum_map! {
+        Event::NormalSent => vec![Trans(1, 1.0)],
+        _ => vec![],
+    });
+    let mut s1 = State::new(enum_map! {
+        Event::NormalSent => vec![Trans(2, 1.0)],
+        _ => vec![],
+    });
+    s1.action = Some(Action::SendPadding {
+        bypass: false,
+        replace: false,
+        timeout: Dist {
+            dist: DistType::Uniform {
+                low: 4.0,
+                high: 4.0,
+            },
+            start: 0.0,
+            max: 0.0,
+        },
+        limit: None,
+    });
+    let mut s2 = State::new(enum_map! {
+        Event::TimerBegin => vec![Trans(3, 1.0)],
+        _ => vec![],
+    });
+    s2.action = Some(Action::UpdateTimer {
+        replace: false,
+        duration: Dist {
+            dist: DistType::Uniform {
+                low: 2.0,
+                high: 2.0,
+            },
+            start: 0.0,
+            max: 0.0,
+        },
+        limit: None,
+    });
+    let mut s3 = State::new(enum_map! {
+        _ => vec![],
+    });
+    s3.action = Some(Action::Cancel {
+        timer: Timer::Internal,
+    });
+
+    let m = Machine::new(0, 0.0, 0, 0.0, vec![s0, s1, s2, s3]).unwrap();
+
+    run_test_sim(
+        "0,sn 1,sn 6,rn 7,sn",
+        "0,qn 0,sn 1,qn 1,sn 1,tb 4,qp 4,sp 6,rn 7,qn 7,sn",
+        Duration::from_micros(5),
+        &[m.clone()],
+        &[],
+        true,
+        100,
+        false,
+    );
+}
+
+#[test_log::test]
+fn test_action_cancel_timer_action() {
+    // start a padding action, start a timer, then cancel the action and observe
+    // the time ending
+    let s0 = State::new(enum_map! {
+        Event::NormalSent => vec![Trans(1, 1.0)],
+        _ => vec![],
+    });
+    let mut s1 = State::new(enum_map! {
+        Event::NormalSent => vec![Trans(2, 1.0)],
+        _ => vec![],
+    });
+    s1.action = Some(Action::SendPadding {
+        bypass: false,
+        replace: false,
+        timeout: Dist {
+            dist: DistType::Uniform {
+                low: 4.0,
+                high: 4.0,
+            },
+            start: 0.0,
+            max: 0.0,
+        },
+        limit: None,
+    });
+    let mut s2 = State::new(enum_map! {
+        Event::TimerBegin => vec![Trans(3, 1.0)],
+        _ => vec![],
+    });
+    s2.action = Some(Action::UpdateTimer {
+        replace: false,
+        duration: Dist {
+            dist: DistType::Uniform {
+                low: 2.0,
+                high: 2.0,
+            },
+            start: 0.0,
+            max: 0.0,
+        },
+        limit: None,
+    });
+    let mut s3 = State::new(enum_map! {
+        _ => vec![],
+    });
+    s3.action = Some(Action::Cancel {
+        timer: Timer::Action,
+    });
+
+    let m = Machine::new(0, 0.0, 0, 0.0, vec![s0, s1, s2, s3]).unwrap();
+
+    run_test_sim(
+        "0,sn 1,sn 6,rn 7,sn",
+        "0,qn 0,sn 1,qn 1,sn 1,tb 3,te 6,rn 7,qn 7,sn",
+        Duration::from_micros(5),
+        &[m.clone()],
+        &[],
+        true,
+        100,
+        false,
+    );
+}
+
+#[test_log::test]
+fn test_action_cancel_timer_both() {
+    // start a padding action, start a timer, then cancel both and observe
+    // no padding and no timer ending
+    let s0 = State::new(enum_map! {
+        Event::NormalSent => vec![Trans(1, 1.0)],
+        _ => vec![],
+    });
+    let mut s1 = State::new(enum_map! {
+        Event::NormalSent => vec![Trans(2, 1.0)],
+        _ => vec![],
+    });
+    s1.action = Some(Action::SendPadding {
+        bypass: false,
+        replace: false,
+        timeout: Dist {
+            dist: DistType::Uniform {
+                low: 4.0,
+                high: 4.0,
+            },
+            start: 0.0,
+            max: 0.0,
+        },
+        limit: None,
+    });
+    let mut s2 = State::new(enum_map! {
+        Event::TimerBegin => vec![Trans(3, 1.0)],
+        _ => vec![],
+    });
+    s2.action = Some(Action::UpdateTimer {
+        replace: false,
+        duration: Dist {
+            dist: DistType::Uniform {
+                low: 2.0,
+                high: 2.0,
+            },
+            start: 0.0,
+            max: 0.0,
+        },
+        limit: None,
+    });
+    let mut s3 = State::new(enum_map! {
+        _ => vec![],
+    });
+    s3.action = Some(Action::Cancel {
+        timer: Timer::All,
+    });
+
+    let m = Machine::new(0, 0.0, 0, 0.0, vec![s0, s1, s2, s3]).unwrap();
+
+    run_test_sim(
+        "0,sn 1,sn 6,rn 7,sn",
+        "0,qn 0,sn 1,qn 1,sn 1,tb 6,rn 7,qn 7,sn",
+        Duration::from_micros(5),
+        &[m.clone()],
+        &[],
+        true,
+        100,
+        false,
+    );
 }
 
 #[test_log::test]
 fn test_counter_machine() {
-// TODO
+    // Add 5 to the counter in the first state, then subtract 2 in the second,
+    // then subtract 1 in the third with self-transitions until we hit the
+    // CounterZero event, then transition to the last 4th state
+    let s0 = State::new(enum_map! {
+        Event::NormalSent => vec![Trans(1, 1.0)],
+        _ => vec![],
+    });
+    let mut s1 = State::new(enum_map! {
+        Event::NormalRecv => vec![Trans(2, 1.0)],
+        _ => vec![],
+    });
+    s1.counter = Some(CounterUpdate{
+        counter: Counter::A,
+        operation: Operation::Increment,
+        value: Some(Dist {
+            dist: DistType::Uniform {
+                low: 5.0,
+                high: 5.0,
+            },
+            start: 0.0,
+            max: 0.0,
+        }),
+    });
+    let mut s2 = State::new(enum_map! {
+        Event::NormalRecv => vec![Trans(3, 1.0)],
+        _ => vec![],
+    });
+    s2.counter = Some(CounterUpdate{
+        counter: Counter::A,
+        operation: Operation::Decrement,
+        value: Some(Dist {
+            dist: DistType::Uniform {
+                low: 2.0,
+                high: 2.0,
+            },
+            start: 0.0,
+            max: 0.0,
+        }),
+    });
+    let mut s3 = State::new(enum_map! {
+        Event::NormalSent => vec![Trans(3, 1.0)],
+        Event::CounterZero => vec![Trans(4, 1.0)],
+        _ => vec![],
+    });
+    s3.counter = Some(CounterUpdate{
+        counter: Counter::A,
+        operation: Operation::Decrement,
+        value: None, // same as 1
+    });
+    let mut s4 = State::new(enum_map! {
+        _ => vec![],
+    });
+    s4.action = Some(Action::SendPadding {
+        bypass: false,
+        replace: false,
+        timeout: Dist {
+            dist: DistType::Uniform {
+                low: 3.0,
+                high: 3.0,
+            },
+            start: 0.0,
+            max: 0.0,
+        },
+        limit: None,
+    });
+    let mut m = Machine::new(0, 0.0, 0, 0.0, vec![s0, s1, s2, s3, s4]).unwrap();
+
+    run_test_sim(
+        "0,sn 6,rn 6,rn 7,sn 7,sn 7,sn",
+        "0,qn 0,sn 6,rn 6,rn 7,qn 7,sn 7,qn 7,sn 7,qn 7,sn 10,qp 10,sp",
+        Duration::from_micros(5),
+        &[m.clone()],
+        &[],
+        true,
+        100,
+        false,
+    );
+
+    // set counter in state 3 to Counter::B, to prevent the CounterZero event
+    // from firing
+    m.states[3].counter = Some(CounterUpdate{
+        counter: Counter::B,
+        operation: Operation::Decrement,
+        value: None,
+    });
+    run_test_sim(
+        "0,sn 6,rn 6,rn 7,sn 7,sn 7,sn",
+        "0,qn 0,sn 6,rn 6,rn 7,qn 7,sn 7,qn 7,sn 7,qn 7,sn",
+        Duration::from_micros(5),
+        &[m.clone()],
+        &[],
+        true,
+        100,
+        false,
+    );
+
+    // update state 1 and 2 to also use Counter::B
+    m.states[1].counter = Some(CounterUpdate{
+        counter: Counter::B,
+        operation: Operation::Increment,
+        value: Some(Dist {
+            dist: DistType::Uniform {
+                low: 5.0,
+                high: 5.0,
+            },
+            start: 0.0,
+            max: 0.0,
+        }),
+    });
+    m.states[2].counter = Some(CounterUpdate{
+        counter: Counter::B,
+        operation: Operation::Decrement,
+        value: Some(Dist {
+            dist: DistType::Uniform {
+                low: 2.0,
+                high: 2.0,
+            },
+            start: 0.0,
+            max: 0.0,
+        }),
+    });
+    run_test_sim(
+        "0,sn 6,rn 6,rn 7,sn 7,sn 7,sn",
+        "0,qn 0,sn 6,rn 6,rn 7,qn 7,sn 7,qn 7,sn 7,qn 7,sn 10,qp 10,sp",
+        Duration::from_micros(5),
+        &[m.clone()],
+        &[],
+        true,
+        100,
+        false,
+    );
+
+    // replace increment in state 1 with set operation, should make no difference
+    m.states[1].counter = Some(CounterUpdate{
+        counter: Counter::B,
+        operation: Operation::Set,
+        value: Some(Dist {
+            dist: DistType::Uniform {
+                low: 5.0,
+                high: 5.0,
+            },
+            start: 0.0,
+            max: 0.0,
+        }),
+    });
+    run_test_sim(
+        "0,sn 6,rn 6,rn 7,sn 7,sn 7,sn",
+        "0,qn 0,sn 6,rn 6,rn 7,qn 7,sn 7,qn 7,sn 7,qn 7,sn 10,qp 10,sp",
+        Duration::from_micros(5),
+        &[m.clone()],
+        &[],
+        true,
+        100,
+        false,
+    );
 }

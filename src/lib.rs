@@ -383,10 +383,10 @@ pub fn sim_advanced(
         // get actions, update scheduled actions
         if next.client {
             debug!("sim(): trigger @client framework\n{:#?}", next.event);
-            trigger_update(&mut client, &next, &current_time);
+            trigger_update(&mut client, &next, &current_time, sq, true);
         } else {
             debug!("sim(): trigger @server framework\n{:#?}", next.event);
-            trigger_update(&mut server, &next, &current_time);
+            trigger_update(&mut server, &next, &current_time, sq, false);
         }
 
         // conditional save to resulting trace: only on network activity if set
@@ -708,6 +708,8 @@ fn trigger_update<M: AsRef<[Machine]>>(
     state: &mut SimState<M>,
     next: &SimEvent,
     current_time: &Instant,
+    sq: &mut SimQueue,
+    is_client: bool,
 ) {
     let trigger_delay = state.trigger_delay();
 
@@ -780,6 +782,19 @@ fn trigger_update<M: AsRef<[Machine]>>(
                     state
                         .scheduled_internal
                         .insert(*machine, Some(*current_time + *duration));
+                    // TimerBegin event
+                    sq.push_sim(
+                        SimEvent {
+                            client: is_client,
+                            event: TriggerEvent::TimerBegin { machine: *machine },
+                            time: *current_time,
+                            delay: Duration::from_micros(0), // TODO: is this correct?
+                            fuzz: fastrand::i32(..),
+                            bypass: false,
+                            replace: false,
+                        },
+                        Reverse(*current_time),
+                    );
                 }
             }
         };
