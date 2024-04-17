@@ -53,7 +53,7 @@ let mut input_trace = parse_trace(raw_trace, &network);
 
 // A simple machine that sends one padding packet 20 milliseconds after the
 // first normal packet is sent.
-let m = "02eNp9ickNAAAEwLAYo3naz0JeROLoq2kBfqg5Ykol5XkPzGUfAVwCAmI=";
+let m = "02eNptibENAAAIwsDH9DRH//Mh4+Jg6EBCC3xshySQfnKvpjp0GFboAmI=";
 let m = Machine::from_str(m).unwrap();
 
 // Run the simulator with the machine at the client. Run the simulation up
