@@ -94,7 +94,7 @@ fn simulator_example_use() {
             }
             TriggerEvent::NormalRecv => {
                 println!(
-                    "received a padding packet at {} ms",
+                    "received a normal packet at {} ms",
                     (p.time - starting_time).as_millis()
                 );
             }
@@ -109,14 +109,14 @@ fn simulator_example_use() {
 
     // Output:
     // sent a normal packet at 0 ms
-    // received a padding packet at 19 ms
+    // received a normal packet at 19 ms
     // sent a padding packet at 20 ms
     // sent a normal packet at 183 ms
-    // received a padding packet at 243 ms
+    // received a normal packet at 243 ms
     // sent a normal packet at 1696 ms
     // sent a normal packet at 2047 ms
-    // received a padding packet at 2055 ms
+    // received a normal packet at 2055 ms
     // sent a normal packet at 9401 ms
     // sent a normal packet at 9401 ms
-    // received a padding packet at 9420 ms
+    // received a normal packet at 9420 ms
 }
