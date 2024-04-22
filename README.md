@@ -53,7 +53,7 @@ let mut input_trace = parse_trace(raw_trace, &network);
 
 // A simple machine that sends one padding packet 20 milliseconds after the
 // first normal packet is sent.
-let m = "02eNptibENAAAIwsDH9DRH//Mh4+Jg6EBCC3xshySQfnKvpjp0GFboAmI=";
+let m = "02eNptibEJAAAIw1of09Mc/c+HRMFFzFBoAlxkliTgurLfT6T9oQBWJgJi";
 let m = Machine::from_str(m).unwrap();
 
 // Run the simulator with the machine at the client. Run the simulation up
@@ -72,7 +72,7 @@ trace
                 (p.time - starting_time).as_millis()
             );
         }
-        TriggerEvent::PaddingSent => {
+        TriggerEvent::PaddingSent  { .. } => {
             println!(
                 "sent a padding packet at {} ms",
                 (p.time - starting_time).as_millis()

@@ -18,7 +18,7 @@ use enum_map::enum_map;
 fn get_test_machine() -> Machine {
     // a simple machine that pads once after 5ms
     let s0 = State::new(enum_map! {
-        Event::NormalQueued => vec![Trans(1, 1.0)],
+        Event::NormalSent => vec![Trans(1, 1.0)],
         _ => vec![],
     });
 
@@ -111,7 +111,8 @@ fn test_action_delay() {
 
     assert_eq!(base_trace.len(), delayed_trace.len());
     assert_eq!(base_trace[1].event, delayed_trace[1].event);
-    assert!(base_trace[1].event.is_event(Event::PaddingSent));
+    assert!(base_trace[1].event.is_event(Event::TunnelSent));
+    assert!(base_trace[1].contains_padding);
     assert_eq!(
         (delayed_trace[1].time - delayed_trace[0].time) - (base_trace[1].time - base_trace[0].time),
         integration.action_delay()
@@ -119,7 +120,8 @@ fn test_action_delay() {
 
     let delayed_trace_server = run_sim(Some(&integration), None, false);
     assert_eq!(base_trace.len(), delayed_trace_server.len());
-    assert!(delayed_trace_server[2].event.is_event(Event::PaddingRecv));
+    assert!(delayed_trace_server[2].event.is_event(Event::TunnelRecv));
+    assert!(delayed_trace_server[2].contains_padding);
     // note below that first recv is 5ms in
     assert_eq!(
         delayed_trace_server[2].time - delayed_trace_server[0].time + Duration::from_millis(5),
@@ -161,7 +163,8 @@ fn test_reporting_delay() {
 
     assert_eq!(base_trace.len(), delayed_trace.len());
     assert_eq!(base_trace[1].event, delayed_trace[1].event);
-    assert!(base_trace[1].event.is_event(Event::PaddingSent));
+    assert!(base_trace[1].event.is_event(Event::TunnelSent));
+    assert!(base_trace[1].contains_padding);
     assert_eq!(
         (delayed_trace[1].time - delayed_trace[0].time) - (base_trace[1].time - base_trace[0].time),
         integration.reporting_delay()
@@ -169,7 +172,8 @@ fn test_reporting_delay() {
 
     let delayed_trace_server = run_sim(Some(&integration), None, false);
     assert_eq!(base_trace.len(), delayed_trace_server.len());
-    assert!(delayed_trace_server[2].event.is_event(Event::PaddingRecv));
+    assert!(delayed_trace_server[2].event.is_event(Event::TunnelRecv));
+    assert!(delayed_trace_server[2].contains_padding);
     // note below that first recv is 5ms in
     assert_eq!(
         delayed_trace_server[2].time - delayed_trace_server[0].time + Duration::from_millis(5),
@@ -211,7 +215,8 @@ fn test_trigger_delay() {
 
     assert_eq!(base_trace.len(), delayed_trace.len());
     assert_eq!(base_trace[1].event, delayed_trace[1].event);
-    assert!(base_trace[1].event.is_event(Event::PaddingSent));
+    assert!(base_trace[1].event.is_event(Event::TunnelSent));
+    assert!(base_trace[1].contains_padding);
     assert_eq!(
         (delayed_trace[1].time - delayed_trace[0].time) - (base_trace[1].time - base_trace[0].time),
         integration.trigger_delay()
@@ -219,7 +224,8 @@ fn test_trigger_delay() {
 
     let delayed_trace_server = run_sim(Some(&integration), None, false);
     assert_eq!(base_trace.len(), delayed_trace_server.len());
-    assert!(delayed_trace_server[2].event.is_event(Event::PaddingRecv));
+    assert!(delayed_trace_server[2].event.is_event(Event::TunnelRecv));
+    assert!(delayed_trace_server[2].contains_padding);
     // note below that first recv is 5ms in
     assert_eq!(
         delayed_trace_server[2].time - delayed_trace_server[0].time + Duration::from_millis(5),
@@ -257,7 +263,8 @@ fn test_action_and_reporting_delay() {
 
     assert_eq!(base_trace.len(), delayed_trace.len());
     assert_eq!(base_trace[1].event, delayed_trace[1].event);
-    assert!(base_trace[1].event.is_event(Event::PaddingSent));
+    assert!(base_trace[1].event.is_event(Event::TunnelSent));
+    assert!(base_trace[1].contains_padding);
     assert_eq!(
         (delayed_trace[1].time - delayed_trace[0].time) - (base_trace[1].time - base_trace[0].time),
         integration.action_delay() + integration.reporting_delay()
@@ -303,7 +310,8 @@ fn test_action_reporting_and_delay() {
 
     assert_eq!(base_trace.len(), delayed_trace.len());
     assert_eq!(base_trace[1].event, delayed_trace[1].event);
-    assert!(base_trace[1].event.is_event(Event::PaddingSent));
+    assert!(base_trace[1].event.is_event(Event::TunnelSent));
+    assert!(base_trace[1].contains_padding);
     assert_eq!(
         (delayed_trace[1].time - delayed_trace[0].time) - (base_trace[1].time - base_trace[0].time),
         integration.action_delay() + integration.reporting_delay() + integration.trigger_delay()

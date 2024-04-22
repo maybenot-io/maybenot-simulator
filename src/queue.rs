@@ -47,6 +47,7 @@ impl SimQueue {
         &mut self,
         event: TriggerEvent,
         is_client: bool,
+        contains_padding: bool,
         time: Instant,
         delay: Duration,
         priority: Reverse<Instant>,
@@ -57,6 +58,7 @@ impl SimQueue {
                 time,
                 delay,
                 client: is_client,
+                contains_padding,
                 bypass: false,
                 replace: false,
                 fuzz: fastrand::i32(..),
@@ -187,7 +189,7 @@ impl EventQueue {
 
     pub fn push(&mut self, item: SimEvent, priority: Reverse<Instant>) {
         match item.event {
-            TriggerEvent::NormalSent | TriggerEvent::PaddingSent => {
+            TriggerEvent::TunnelSent => {
                 match item.bypass {
                     true => self.blocking_bypassable.push(item, priority),
                     false => self.blocking.push(item, priority),
@@ -224,7 +226,7 @@ impl EventQueue {
 
     pub fn remove(&mut self, item: &SimEvent) {
         match item.event {
-            TriggerEvent::NormalSent | TriggerEvent::PaddingSent => {
+            TriggerEvent::TunnelSent => {
                 match item.bypass {
                     true => self.blocking_bypassable.remove(item),
                     false => self.blocking.remove(item),

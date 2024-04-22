@@ -61,31 +61,16 @@ pub fn sim_network_stack<M: AsRef<[Machine]>>(
     let side = if next.client { "client" } else { "server" }.to_string();
 
     match next.event {
-        // here we simulate the queueing of packets
-        TriggerEvent::NormalQueued => {
-            debug!("\tqueue {}", Event::NormalSent);
-            // TODO: queuing delay
-            sq.push(
-                TriggerEvent::NormalSent,
-                next.client,
-                next.time,
-                next.delay,
-                Reverse(next.time),
-            );
-            false
-        }
-        // here we simulate the queueing of packets
-        TriggerEvent::PaddingQueued { .. } => {
-            debug!("\tqueue {}", Event::PaddingSent);
-            // TODO: queuing delay
+        // here we simulate sending the packet into the tunnel
+        TriggerEvent::NormalSent => {
+            debug!("\tqueue {}", Event::TunnelSent);
             sq.push_sim(
                 SimEvent {
-                    event: TriggerEvent::PaddingSent,
+                    event: TriggerEvent::TunnelSent,
                     time: next.time,
                     delay: next.delay,
                     client: next.client,
-                    // we need to copy the bypass and replace flags, unlike for
-                    // normal queued above
+                    contains_padding: false,
                     bypass: next.bypass,
                     replace: next.replace,
                     fuzz: next.fuzz,
@@ -94,42 +79,13 @@ pub fn sim_network_stack<M: AsRef<[Machine]>>(
             );
             false
         }
-        // easy: queue up the recv event on the other side
-        TriggerEvent::NormalSent => {
-            debug!("\tqueue {}", Event::NormalRecv);
-            // The time the event was reported to us is in next.time. We have to
-            // remove the reporting delay locally, then add a network delay and
-            // a reporting delay (at the recipient) for the recipient.
-            //
-            // LIMITATION, we also have to deal with an ugly edge-case: if the
-            // reporting delay is very long *at the sender*, then the event can
-            // actually arrive earlier at the recipient than it was reported to
-            // the sender. This we cannot deal with in the current design of the
-            // simulator (support for integration delays was bolted on late),
-            // because it would move time backwards. Therefore, we clamp.
-            let reporting_delay = recipient.reporting_delay();
-            let reported = max(
-                next.time - next.delay + network.sample() + reporting_delay,
-                *current_time,
-            );
-            sq.push(
-                TriggerEvent::NormalRecv,
-                !next.client,
-                reported,
-                reporting_delay,
-                Reverse(reported),
-            );
-
-            true
-        }
-        TriggerEvent::PaddingSent => {
+        // here we simulate sending the packet into the tunnel
+        TriggerEvent::PaddingSent { .. } => {
             if next.replace {
-                // This is where it gets tricky: we MAY replace the padding with
-                // existing padding or a normal packet already queued (or about
-                // to be queued up). The behavior here is tricky, since it'll
-                // differ how different implementations handle it. Note that
-                // replacing is the same as skipping to queue the padding recv
-                // event below.
+                // replace flag is set:
+                // - if we just sent a packet, we can skip sending the padding
+                // - if we have a normal packet queued up to be sent within the
+                //   network replace window, we can replace the padding with that
 
                 // check if we can replace with last sent up to the network
                 // replace window: this probably poorly simulates an egress
@@ -140,14 +96,13 @@ pub fn sim_network_stack<M: AsRef<[Machine]>>(
                     NETWORK_REPLACE_WINDOW
                 );
                 if next.time.duration_since(state.last_sent_time) <= NETWORK_REPLACE_WINDOW {
-                    debug!("replacing padding sent with last sent @{}", side);
+                    debug!("replacing normal sent with last sent @{}", side);
                     return false;
                 }
 
                 // can replace with normal that's queued to be sent within the
                 // network replace window? FIXME: here be bugs related to
-                // integration delays. Once blocking is implemented, this code
-                // needs to be reworked.
+                // integration delays.
                 let peek = sq.peek_blocking(state.blocking_bypassable, next.client);
                 if let Some((queued, _)) = peek {
                     let queued = queued.clone();
@@ -158,9 +113,10 @@ pub fn sim_network_stack<M: AsRef<[Machine]>>(
                     );
                     if queued.client == next.client
                         && queued.time.duration_since(next.time) <= NETWORK_REPLACE_WINDOW
-                        && TriggerEvent::NormalSent == queued.event
+                        && TriggerEvent::TunnelSent == queued.event
+                        && !queued.contains_padding
                     {
-                        debug!("replacing padding sent with queued normal @{}", side,);
+                        debug!("replacing padding sent with normal sent @{}", side,);
                         // let the NormalSent event bypass
                         // blocking by making a copy of the event
                         // with the appropriate flags set
@@ -178,24 +134,94 @@ pub fn sim_network_stack<M: AsRef<[Machine]>>(
                     }
                 }
             }
-
             // nothing to replace with (or we're not replacing), so queue up
-            debug!("\tqueue {}", Event::PaddingRecv);
+            debug!("\tqueue {}", Event::TunnelSent);
+            sq.push_sim(
+                SimEvent {
+                    event: TriggerEvent::TunnelSent,
+                    time: next.time,
+                    delay: next.delay,
+                    client: next.client,
+                    contains_padding: true,
+                    bypass: next.bypass,
+                    replace: next.replace,
+                    fuzz: next.fuzz,
+                },
+                Reverse(next.time),
+            );
+            return false;
+        }
+        TriggerEvent::TunnelSent => {
+            debug!("\tqueue {}", Event::TunnelRecv);
+            if !next.contains_padding {
+                // The time the event was reported to us is in next.time. We have to
+                // remove the reporting delay locally, then add a network delay and
+                // a reporting delay (at the recipient) for the recipient.
+                //
+                // LIMITATION, we also have to deal with an ugly edge-case: if the
+                // reporting delay is very long *at the sender*, then the event can
+                // actually arrive earlier at the recipient than it was reported to
+                // the sender. This we cannot deal with in the current design of the
+                // simulator (support for integration delays was bolted on late),
+                // because it would move time backwards. Therefore, we clamp.
+                let reporting_delay = recipient.reporting_delay();
+                let reported = max(
+                    next.time - next.delay + network.sample() + reporting_delay,
+                    *current_time,
+                );
+                sq.push(
+                    TriggerEvent::TunnelRecv,
+                    !next.client,
+                    false,
+                    reported,
+                    reporting_delay,
+                    Reverse(reported),
+                );
+
+                return true;
+            }
+
+            // padding, less complicated
+            debug!("\tqueue {}", Event::TunnelRecv);
             let reporting_delay = recipient.reporting_delay();
             // action delay + network + recipient reporting delay
             let reported = next.time + next.delay + network.sample() + reporting_delay;
             sq.push(
-                TriggerEvent::PaddingRecv,
+                TriggerEvent::TunnelRecv,
                 !next.client,
+                true,
                 reported,
                 reporting_delay,
                 Reverse(reported),
             );
 
-            true
+            return true;
         }
-        // receiving a packet is network activity
-        TriggerEvent::NormalRecv | TriggerEvent::PaddingRecv => true,
+        TriggerEvent::TunnelRecv => {
+            // spawn NormalRecv or PaddingRecv
+            if next.contains_padding {
+                debug!("\tqueue {}", Event::PaddingRecv);
+                sq.push(
+                    TriggerEvent::PaddingRecv,
+                    next.client,
+                    true,
+                    next.time,
+                    next.delay,
+                    Reverse(next.time),
+                );
+            } else {
+                debug!("\tqueue {}", Event::NormalRecv);
+                sq.push(
+                    TriggerEvent::NormalRecv,
+                    next.client,
+                    false,
+                    next.time,
+                    next.delay,
+                    Reverse(next.time),
+                );
+            }
+            return true;
+        }
         // all other events are not network activity
         _ => false,
     }

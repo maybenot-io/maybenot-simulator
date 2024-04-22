@@ -23,7 +23,7 @@ pub fn peek_queue<M: AsRef<[Machine]>>(
     let peek = sq.peek().unwrap().0.clone();
 
     // easy: non-blocking event first
-    if !peek.event.is_event(Event::PaddingSent) && !peek.event.is_event(Event::NormalSent) {
+    if !peek.event.is_event(Event::TunnelSent) {
         return (peek.time.duration_since(current_time), Some(peek));
     }
 
@@ -53,15 +53,14 @@ pub fn peek_queue<M: AsRef<[Machine]>>(
     if (peek.client
         && client_blocking
         && client.blocking_bypassable
-        // bypassable NormalSent is the result of replaced padding
-        && (peek.event.is_event(Event::PaddingSent) || peek.event.is_event(Event::NormalSent))
+        // bypassable TunnelSent is the result of replaced padding
+        && (peek.event.is_event(Event::TunnelSent))
         && peek.bypass)
         || (!peek.client
             && server_blocking
             && server.blocking_bypassable
-            // bypassable NormalSent is the result of replaced padding
-            && (peek.event.is_event(Event::PaddingSent)
-                || peek.event.is_event(Event::NormalSent))
+            // bypassable TunnelSent is the result of replaced padding
+            && (peek.event.is_event(Event::TunnelSent))
             && peek.bypass)
     {
         return (peek.time.duration_since(current_time), Some(peek));

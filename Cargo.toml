@@ -14,7 +14,7 @@ repository = "https://github.com/maybenot-io/maybenot-simulator"
 
 [dependencies]
 priority-queue = "1.3.2"
-maybenot = { path = "/home/pulls/Documents/maybenot/maybenot/" }
+maybenot = { path = "../maybenot/" }
 log = "0.4.20"
 test-log = "0.2.12"
 fastrand = "2.0.0"

@@ -37,7 +37,7 @@ fn run_test_sim(
         max_trace_length,
         only_packets,
     );
-    let mut fmt = fmt_trace(trace.clone(), client);
+    let mut fmt = fmt_trace(trace, client);
     if fmt.len() > output.len() {
         fmt = fmt.get(0..output.len()).unwrap().to_string();
     }
@@ -79,8 +79,9 @@ fn make_sq(s: String, delay: Duration, starting_time: Instant) -> SimQueue {
                 "s" | "sn" => {
                     // client sent at the given time
                     sq.push(
-                        TriggerEvent::NormalQueued,
+                        TriggerEvent::NormalSent,
                         true,
+                        false,
                         timestamp,
                         integration_delay,
                         Reverse(timestamp),
@@ -90,7 +91,8 @@ fn make_sq(s: String, delay: Duration, starting_time: Instant) -> SimQueue {
                     // sent by server delay time ago
                     let sent = timestamp - delay;
                     sq.push(
-                        TriggerEvent::NormalQueued,
+                        TriggerEvent::NormalSent,
+                        false,
                         false,
                         sent,
                         integration_delay,
@@ -141,7 +143,7 @@ fn test_no_machine() {
     // client
     run_test_sim(
         input,
-        input,
+        "0,st 18,st 25,rt 25,rt 30,st 35,rt",
         Duration::from_micros(5),
         &[],
         &[],
@@ -152,7 +154,7 @@ fn test_no_machine() {
     // server
     run_test_sim(
         input,
-        "5,rn 20,sn 20,sn 23,rn 30,sn 35,rn",
+        "5,rt 20,st 20,st 23,rt 30,st 35,rt",
         Duration::from_micros(5),
         &[],
         &[],
@@ -191,7 +193,7 @@ fn test_simple_pad_machine() {
     // client machine and client output
     run_test_sim(
         "0,sn 18,sn 25,rn 25,rn 30,sn 35,rn",
-        "0,qn 0,sn 8,qp 8,sp 16,qp 16,sp 18,qn 18,sn 24,qp 24,sp 25,rn 25,rn 30,qn 30,sn 32,qp 32,sp 35,rn",
+        "0,sn 0,st 8,sp 8,st 16,sp 16,st 18,sn 18,st 24,sp 24,st 25,rt 25,rt 25,rn 25,rn 30,sn 30,st 32,sp 32,st 35,rt 35,rn",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -203,7 +205,7 @@ fn test_simple_pad_machine() {
     // client machine and server output
     run_test_sim(
         "0,sn 18,sn 25,rn 25,rn 30,sn 35,rn",
-        "5,rn 13,rp 20,qn 20,sn 20,qn 20,sn 21,rp 23,rn 29,rp 30,qn 30,sn 35,rn 37,rp 45,rp",
+        "5,rt 5,rn 13,rt 13,rp 20,sn 20,st 20,sn 20,st 21,rt 21,rp 23,rt 23,rn 29,rt 29,rp 30,sn 30,st 35,rt 35,rn 37,rt 37,rp 45,rt 45,rp",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -215,7 +217,7 @@ fn test_simple_pad_machine() {
     // server machine and client output
     run_test_sim(
         "0,sn 18,sn 25,rn 25,rn 30,sn 35,rn",
-        "0,qn 0,sn 18,qn 18,sn 25,rn 25,rn 30,qn 30,sn 33,rp 35,rn",
+        "0,sn 0,st 18,sn 18,st 25,rt 25,rt 25,rn 25,rn 30,sn 30,st 33,rt 33,rp 35,rt 35,rn",
         Duration::from_micros(5),
         &[],
         &[m.clone()],
@@ -227,7 +229,7 @@ fn test_simple_pad_machine() {
     // server machine and server output
     run_test_sim(
         "0,sn 18,sn 25,rn 25,rn 30,sn 35,rn",
-        "5,rn 20,qn 20,sn 20,qn 20,sn 23,rn 28,qp 28,sp 30,qn 30,sn 35,rn 36,qp 36,sp 44,qp 44,sp",
+        "5,rt 5,rn 20,sn 20,st 20,sn 20,st 23,rt 23,rn 28,sp 28,st 30,sn 30,st 35,rt 35,rn 36,sp 36,st 44,sp 44,st",
         Duration::from_micros(5),
         &[],
         &[m],
@@ -276,7 +278,7 @@ fn test_simple_block_machine() {
     // note in the output how 18,sn should be delayed until 20,sn due to blocking
     run_test_sim(
         "0,sn 18,sn 25,rn 25,rn 30,sn 35,rn",
-        "0,qn 0,sn 5,bb 10,be 15,bb 18,qn 20,sn 20,be 25,rn 25,rn 25,bb 30,qn 30,sn 30,be 35,rn 35,bb",
+        "0,sn 0,st 5,bb 10,be 15,bb 18,sn 20,st 20,be 25,rt 25,rt 25,rn 25,rn 25,bb 30,sn 30,st 30,be 35,rt 35,rn 35,bb",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -288,7 +290,7 @@ fn test_simple_block_machine() {
     // server
     run_test_sim(
         "0,sn 18,sn 25,rn 25,rn 30,sn 35,rn",
-        "5,rn 20,qn 20,sn 20,qn 20,sn 23,rn 25,bb 30,qn 30,sn 30,be 35,rn 35,bb 40,be",
+        "5,rt 5,rn 20,sn 20,st 20,sn 20,st 23,rt 23,rn 25,bb 30,sn 30,st 30,be 35,rt 35,rn 35,bb 40,be",
         Duration::from_micros(5),
         &[],
         &[m.clone()],
@@ -337,7 +339,7 @@ fn test_both_block_machine() {
 
     run_test_sim(
         "0,sn 7,rn 8,sn 14,rn 18,sn",
-        "0,qn 0,sn 5,bb 7,rn 8,qn 10,sn 10,be 15,bb 17,rn 18,qn 20,sn 20,be",
+        "0,sn 0,st 5,bb 7,rt 7,rn 8,sn 10,st 10,be 15,bb 17,rt 17,rn 18,sn 20,st 20,be",
         Duration::from_micros(5),
         &[client],
         &[server],
@@ -381,7 +383,7 @@ fn test_block_and_padding() {
         limit: None,
     });
     let mut s2 = State::new(enum_map! {
-        Event::PaddingQueued => vec![Trans(2, 1.0)],
+        Event::PaddingSent => vec![Trans(2, 1.0)],
         _ => vec![],
     });
     s2.action = Some(Action::SendPadding {
@@ -409,7 +411,7 @@ fn test_block_and_padding() {
     // client
     run_test_sim(
         "0,sn 6,rn 14,sn",
-        "0,qn 0,sn 5,bb 6,rn 6,qp 7,qp 8,qp 14,qn 15,sp 15,sp 15,sp 15,sn 15,be",
+        "0,sn 0,st 5,bb 6,rt 6,rn 6,sp 7,sp 8,sp 14,sn 15,st 15,st 15,st 15,st 15,be",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -421,16 +423,15 @@ fn test_block_and_padding() {
     // server log of client machine
     run_test_sim(
         "0,sn 6,rn 14,sn",
-        // would want it to be: "1,qn 1,sn 5,rn 20,rp 20,rp 20,rp 20,rn", but we
-        // have an order change here, due to PriorityQueue implementation I
+        // the order below is not ideal, due to PriorityQueue implementation I
         // think ... technically still fine, since the network can reorder and
         // it's on the same time, but still a bit annoying
-        "1,qn 1,sn 5,rn 20,rp 20,rn 20,rp 20,rp",
+        "1,sn 1,st 5,rt 5,rn 20,rt 20,rt 20,rp 20,rn 20,rt 20,rt 20,rp 20,rp",
         Duration::from_micros(5),
         &[m],
         &[],
         false,
-        20,
+        40,
         false,
     );
 }
@@ -469,7 +470,7 @@ fn test_bypass_machine() {
         limit: None,
     });
     let mut s2 = State::new(enum_map! {
-        Event::PaddingQueued => vec![Trans(2, 1.0)],
+        Event::PaddingSent => vec![Trans(2, 1.0)],
         _ => vec![],
     });
     s2.action = Some(Action::SendPadding {
@@ -497,24 +498,24 @@ fn test_bypass_machine() {
     // client
     run_test_sim(
         "0,sn 6,rn 14,sn",
-        "0,qn 0,sn 5,bb 6,rn 6,qp 6,sp 7,qp 7,sp 8,qp 8,sp 14,qn 15,sn 15,be",
+        "0,sn 0,st 5,bb 6,rt 6,rn 6,sp 6,st 7,sp 7,st 8,sp 8,st 14,sn 15,st 15,be",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
         true,
-        20,
+        40,
         false,
     );
 
     // server log of client machine
     run_test_sim(
         "0,sn 6,rn 14,sn",
-        "1,qn 1,sn 5,rn 11,rp 12,rp 13,rp 20,rn",
+        "1,sn 1,st 5,rt 5,rn 11,rt 11,rp 12,rt 12,rp 13,rt 13,rp 20,rt 20,rn",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
         false,
-        20,
+        40,
         false,
     );
 
@@ -524,24 +525,24 @@ fn test_bypass_machine() {
     // client
     run_test_sim(
         "0,sn 6,rn 14,sn",
-        "0,qn 0,sn 5,bb 6,rn 6,qp 7,qp 8,qp 14,qn 15,sp 15,sp 15,sp 15,sn 15,be",
+        "0,sn 0,st 5,bb 6,rt 6,rn 6,sp 7,sp 8,sp 14,sn 15,st 15,st 15,st 15,st 15,be",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
         true,
-        20,
+        40,
         false,
     );
 
     // server log of client machine
     run_test_sim(
         "0,sn 6,rn 14,sn",
-        "1,qn 1,sn 5,rn 20,rp 20,rn 20,rp 20,rp",
+        "1,sn 1,st 5,rt 5,rn 20,rt 20,rt 20,rp 20,rn 20,rt 20,rt 20,rp 20,rp",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
         false,
-        20,
+        40,
         false,
     );
 
@@ -552,7 +553,7 @@ fn test_bypass_machine() {
     // client
     run_test_sim(
         "0,sn 6,rn 14,sn",
-        "0,qn 0,sn 5,bb 6,rn 6,qp 7,qp 8,qp 14,qn 15,sp 15,sp 15,sp 15,sn 15,be",
+        "0,sn 0,st 5,bb 6,rt 6,rn 6,sp 7,sp 8,sp 14,sn 15,st 15,st 15,st 15,st 15,be",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -564,12 +565,12 @@ fn test_bypass_machine() {
     // server log of client machine
     run_test_sim(
         "0,sn 6,rn 14,sn",
-        "1,qn 1,sn 5,rn 20,rp 20,rn 20,rp 20,rp",
+        "1,sn 1,st 5,rt 5,rn 20,rt 20,rt 20,rp 20,rn 20,rt 20,rt 20,rp 20,rp",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
         false,
-        20,
+        40,
         false,
     );
 
@@ -580,24 +581,24 @@ fn test_bypass_machine() {
     // client
     run_test_sim(
         "0,sn 6,rn 14,sn",
-        "0,qn 0,sn 5,bb 6,rn 6,qp 7,qp 8,qp 14,qn 15,sp 15,sp 15,sp 15,sn 15,be",
+        "0,sn 0,st 5,bb 6,rt 6,rn 6,sp 7,sp 8,sp 14,sn 15,st 15,st 15,st 15,st 15,be",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
         true,
-        20,
+        40,
         false,
     );
 
     // server log of client machine
     run_test_sim(
         "0,sn 6,rn 14,sn",
-        "1,qn 1,sn 5,rn 20,rp 20,rn 20,rp 20,rp",
+        "1,sn 1,st 5,rt 5,rn 20,rt 20,rt 20,rp 20,rn 20,rt 20,rt 20,rp 20,rp",
         Duration::from_micros(5),
         &[m],
         &[],
         false,
-        20,
+        40,
         false,
     );
 }
@@ -606,7 +607,7 @@ fn test_bypass_machine() {
 fn test_replace_machine() {
     // test replace within the network replace window
 
-    // a simple machine that pads every 2us six times
+    // a simple machine that pads every 2us three times
     let s0 = State::new(enum_map! {
         Event::NormalSent => vec![Trans(1, 1.0)],
         _ => vec![],
@@ -628,8 +629,8 @@ fn test_replace_machine() {
         },
         limit: Some(Dist {
             dist: DistType::Uniform {
-                low: 6.0,
-                high: 6.0,
+                low: 3.0,
+                high: 3.0,
             },
             start: 0.0,
             max: 0.0,
@@ -640,7 +641,7 @@ fn test_replace_machine() {
     // client machine and client output
     run_test_sim(
         "0,sn 4,sn 6,rn 6,rn 7,sn",
-        "0,sn 2,sp 4,sn 4,sp 6,rn 6,rn 6,sp 7,sn",
+        "0,st 2,st 4,st 4,st 6,rt 6,rt 6,st 7,st",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -651,7 +652,7 @@ fn test_replace_machine() {
     // client machine and server output
     run_test_sim(
         "0,sn 4,sn 6,rn 6,rn 7,sn",
-        "1,sn 1,sn 5,rn 7,rp 9,rp 9,rn",
+        "1,st 1,st 5,rt 7,rt 9,rt 9,rt",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -666,7 +667,7 @@ fn test_replace_machine() {
     // client machine and client output
     run_test_sim(
         "0,sn 4,sn 6,rn 6,rn 7,sn",
-        "0,sn 2,sp 4,sn 6,rn 6,rn 6,sp 7,sn",
+        "0,st 2,st 4,st 6,rt 6,rt 6,st 7,st",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -677,7 +678,7 @@ fn test_replace_machine() {
     // client machine and server output
     run_test_sim(
         "0,sn 4,sn 6,rn 6,rn 7,sn",
-        "1,sn 1,sn 5,rn 7,rp 9,rn",
+        "1,st 1,st 5,rt 7,rt 9,rt",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -711,7 +712,7 @@ fn test_replace_machine() {
     // client machine and client output
     run_test_sim(
         "0,sn 4,sn 6,rn 6,rn 7,sn",
-        "0,qn 0,sn 1,qp 1,sp 2,qp 2,sp 3,qp 3,sp 4,qn 4,sn 4,qp 4,sp 5,qp 5,sp 6,rn 6,rn 6,qp 6,sp 7,qn 7,sn",
+        "0,sn 0,st 1,sp 1,st 2,sp 2,st 3,sp 3,st 4,sn 4,st 4,sp 4,st 5,sp 5,st 6,rt 6,rt 6,rn 6,rn 6,sp 6,st 7,sn 7,st",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -730,7 +731,7 @@ fn test_replace_machine() {
         // padding at 3us is replaced by 2,sn
         // padding at 4us is replaced by 4,sn
         // padding at 5us is replaced by 4,sn
-        "0,sn 2,sp 4,sn 6,rn 6,rn 6,sp 7,sn",
+        "0,st 2,st 4,st 6,rt 6,rt 6,st 7,st",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -738,6 +739,8 @@ fn test_replace_machine() {
         40,
         true,
     );
+
+    // make the machine pad 6 times within 0us
     m.states[1].action = Some(Action::SendPadding {
         bypass: false,
         replace: true,
@@ -761,7 +764,7 @@ fn test_replace_machine() {
     // client machine and client output
     run_test_sim(
         "0,sn 4,sn 6,rn 6,rn 7,sn",
-        "0,sn 4,sn 6,rn 6,rn 7,sn",
+        "0,st 4,st 6,rt 6,rt 7,st",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -772,7 +775,7 @@ fn test_replace_machine() {
     // check for the padding events, not packets (that got replaced)
     run_test_sim(
         "0,sn 4,sn 6,rn 6,rn 7,sn",
-        "0,qn 0,sn 0,qp 0,sp 0,qp 0,sp 0,qp 0,sp 0,qp 0,sp 0,qp 0,sp 0,qp 0,sp 4,qn 4,sn 6,rn 6,rn 7,qn 7,sn",
+        "0,sn 0,st 0,sp 0,sp 0,sp 0,sp 0,sp 0,sp 4,sn 4,st 6,rt 6,rt 6,rn 6,rn 7,sn 7,st",
         Duration::from_micros(5),
         &[m],
         &[],
@@ -847,7 +850,7 @@ fn test_bypass_replace_machine() {
     // client, without any bypass or replace
     run_test_sim(
         "0,sn 4,sn 6,rn 6,rn 7,sn",
-        "0,qn 0,sn 1,bb 3,qp 4,qn 6,rn 6,rn 7,qn 1001,sp 1001,sn 1001,sn 1001,be 1003,qp 1003,sp",
+        "0,sn 0,st 1,bb 3,sp 4,sn 5,sp 6,rt 6,rt 6,rn 6,rn 7,sn 7,sp 1001,st 1001,st 1001,st 1001,st 1001,st 1001,be",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -861,18 +864,18 @@ fn test_bypass_replace_machine() {
     set_bypass(&mut m.states[2], true);
     run_test_sim(
         "0,sn 4,sn 6,rn 6,rn 7,sn",
-        "0,qn 0,sn 1,bb 3,qp 3,sp 4,qn 5,qp 5,sp 6,rn 6,rn 7,qn 7,qp 7,sp 1001,sn 1001,sn 1001,be",
+        "0,sn 0,st 1,bb 3,sp 3,st 4,sn 5,sp 5,st 6,rt 6,rt 6,rn 6,rn 7,sn 7,sp 7,st 1001,st 1001,st 1001,be",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
         true,
-        40,
+        100,
         false,
     );
     // client, with bypass and only packets on wire
     run_test_sim(
         "0,sn 4,sn 6,rn 6,rn 7,sn",
-        "0,sn 3,sp 5,sp 6,rn 6,rn 7,sp 1001,sn 1001,sn",
+        "0,st 3,st 5,st 6,rt 6,rt 7,st 1001,st 1001,st",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -881,17 +884,17 @@ fn test_bypass_replace_machine() {
         true, // NOTE only packets as-is on the wire
     );
 
-    // client, with bypass and replace, only packets on wire
+    // client, with bypass *and replace*, only packets on wire
     set_replace(&mut m.states[2], true);
     run_test_sim(
         "0,sn 4,sn 6,rn 6,rn 7,sn",
-        // sp 5 is replaced by sn 4, then sp at 7 replaced by sn 7
-        "0,sn 3,sp 5,sn 6,rn 6,rn 7,sn",
+        // padding at 5us is replaced by sending queued up 4,sn, and padding at 7us is replaced by queued up 7,sn
+        "0,st 3,st 5,st 6,rt 6,rt 7,st",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
         true,
-        40,
+        100,
         true, // NOTE only packets as-is on the wire
     );
 
@@ -899,7 +902,7 @@ fn test_bypass_replace_machine() {
     run_test_sim(
         "0,sn 4,sn 6,rn 6,rn 7,sn",
         // with all events, we also get SP events and blocking events
-        "0,qn 0,sn 1,bb 3,qp 3,sp 4,qn 5,qp 5,sp 5,sn 6,rn 6,rn 7,qn 7,qp 7,sp 7,sn 1001,be",
+        "0,sn 0,st 1,bb 3,sp 3,st 4,sn 5,sp 5,st 6,rt 6,rt 6,rn 6,rn 7,sn 7,sp 7,st 1001,be",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -912,7 +915,7 @@ fn test_bypass_replace_machine() {
     // queued up earlier than that?  They should also replace padding
     run_test_sim(
         "0,sn 2,sn 2,sn 6,rn 6,rn 7,sn",
-        "0,sn 3,sn 5,sn 6,rn 6,rn 7,sn",
+        "0,st 3,st 5,st 6,rt 6,rt 7,st",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -923,7 +926,7 @@ fn test_bypass_replace_machine() {
     run_test_sim(
         "0,sn 2,sn 2,sn 6,rn 6,rn 7,sn",
         // with all events, we also get SP events and blocking events
-        "0,qn 0,sn 1,bb 2,qn 2,qn 3,qp 3,sp 3,sn 5,qp 5,sp 5,sn 6,rn 6,rn 7,qn 7,qp 7,sp 7,sn 1001,be",
+        "0,sn 0,st 1,bb 2,sn 2,sn 3,sp 3,st 5,sp 5,st 6,rt 6,rt 6,rn 6,rn 7,sn 7,sp 7,st 1001,be",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -936,7 +939,7 @@ fn test_bypass_replace_machine() {
     // only does 3 padding packets due to limit
     run_test_sim(
         "0,sn 2,sn 2,sn 2,sn 2,sn 6,rn 6,rn 7,sn",
-        "0,sn 3,sn 5,sn 6,rn 6,rn 7,sn 1001,sn 1001,sn",
+        "0,st 3,st 5,st 6,rt 6,rt 7,st 1001,st 1001,st",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -959,7 +962,7 @@ fn test_bypass_replace_machine() {
     };
     run_test_sim(
         "0,sn 2,sn 2,sn 2,sn 2,sn 6,rn 6,rn 7,sn",
-        "0,sn 3,sn 5,sn 6,rn 6,rn 7,sn 9,sn 11,sn",
+        "0,st 3,st 5,st 6,rt 6,rt 7,st 9,st 11,st",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -971,7 +974,7 @@ fn test_bypass_replace_machine() {
     // we've been lazy so far, not checking the server
     run_test_sim(
         "0,sn 2,sn 2,sn 2,sn 2,sn 6,rn 6,rn 7,sn",
-        "1,sn 1,sn 5,rn 8,rn 10,rn 12,rn 14,rn 16,rn",
+        "1,st 1,st 5,rt 8,rt 10,rt 12,rt 14,rt 16,rt",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -981,7 +984,7 @@ fn test_bypass_replace_machine() {
     );
     run_test_sim(
         "0,sn 2,sn 2,sn 2,sn 2,sn 6,rn 6,rn 7,sn",
-        "1,qn 1,sn 1,qn 1,sn 5,rn 8,rn 10,rn 12,rn 14,rn 16,rn",
+        "1,sn 1,st 1,sn 1,st 5,rt 5,rn 8,rt 8,rn 10,rt 10,rn 12,rt 12,rn 14,rt 14,rn 16,rt 16,rn",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -1078,7 +1081,7 @@ fn test_timer_action_basic() {
 
     run_test_sim(
         "0,sn 3,sn 6,rn 6,rn 7,sn",
-        "0,qn 0,sn 0,tb 2,te 3,qn 3,sn 3,qp 3,sp 6,rn 6,rn 7,qn 7,sn",
+        "0,sn 0,st 0,tb 2,te 3,sn 3,st 3,sp 3,st 6,rt 6,rt 6,rn 6,rn 7,sn 7,st",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -1148,7 +1151,7 @@ fn test_timer_action_longest() {
 
     run_test_sim(
         "0,sn 3,sn 6,rn 6,rn 7,sn",
-        "0,qn 0,sn 0,tb 3,qn 3,sn 6,rn 6,rn 7,qn 7,sn 10,te 11,qp 11,sp",
+        "0,sn 0,st 0,tb 3,sn 3,st 6,rt 6,rt 6,rn 6,rn 7,sn 7,st 10,te 11,sp 11,st",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -1218,7 +1221,7 @@ fn test_timer_action_replace() {
 
     run_test_sim(
         "0,sn 3,sn 6,rn 6,rn 7,sn",
-        "0,qn 0,sn 0,tb 0,tb 2,te 3,qn 3,sn 3,qp 3,sp 6,rn 6,rn 7,qn 7,sn",
+        "0,sn 0,st 0,tb 0,tb 2,te 3,sn 3,st 3,sp 3,st 6,rt 6,rt 6,rn 6,rn 7,sn 7,st",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -1280,7 +1283,7 @@ fn test_action_cancel_timer_internal() {
 
     run_test_sim(
         "0,sn 1,sn 6,rn 7,sn",
-        "0,qn 0,sn 1,qn 1,sn 1,tb 4,qp 4,sp 6,rn 7,qn 7,sn",
+        "0,sn 0,st 1,sn 1,st 1,tb 4,sp 4,st 6,rt 6,rn 7,sn 7,st",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -1342,7 +1345,7 @@ fn test_action_cancel_timer_action() {
 
     run_test_sim(
         "0,sn 1,sn 6,rn 7,sn",
-        "0,qn 0,sn 1,qn 1,sn 1,tb 3,te 6,rn 7,qn 7,sn",
+        "0,sn 0,st 1,sn 1,st 1,tb 3,te 6,rt 6,rn 7,sn 7,st",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -1402,7 +1405,7 @@ fn test_action_cancel_timer_both() {
 
     run_test_sim(
         "0,sn 1,sn 6,rn 7,sn",
-        "0,qn 0,sn 1,qn 1,sn 1,tb 6,rn 7,qn 7,sn",
+        "0,sn 0,st 1,sn 1,st 1,tb 6,rt 6,rn 7,sn 7,st",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -1483,7 +1486,7 @@ fn test_counter_machine() {
 
     run_test_sim(
         "0,sn 6,rn 6,rn 7,sn 7,sn 7,sn",
-        "0,qn 0,sn 6,rn 6,rn 7,qn 7,sn 7,qn 7,sn 7,qn 7,sn 10,qp 10,sp",
+        "0,sn 0,st 6,rt 6,rt 6,rn 6,rn 7,sn 7,st 7,sn 7,st 7,sn 7,st 10,sp 10,st",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -1501,7 +1504,7 @@ fn test_counter_machine() {
     });
     run_test_sim(
         "0,sn 6,rn 6,rn 7,sn 7,sn 7,sn",
-        "0,qn 0,sn 6,rn 6,rn 7,qn 7,sn 7,qn 7,sn 7,qn 7,sn",
+        "0,sn 0,st 6,rt 6,rt 6,rn 6,rn 7,sn 7,st 7,sn 7,st 7,sn 7,st",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -1537,7 +1540,7 @@ fn test_counter_machine() {
     });
     run_test_sim(
         "0,sn 6,rn 6,rn 7,sn 7,sn 7,sn",
-        "0,qn 0,sn 6,rn 6,rn 7,qn 7,sn 7,qn 7,sn 7,qn 7,sn 10,qp 10,sp",
+        "0,sn 0,st 6,rt 6,rt 6,rn 6,rn 7,sn 7,st 7,sn 7,st 7,sn 7,st 10,sp 10,st",
         Duration::from_micros(5),
         &[m.clone()],
         &[],
@@ -1561,7 +1564,7 @@ fn test_counter_machine() {
     });
     run_test_sim(
         "0,sn 6,rn 6,rn 7,sn 7,sn 7,sn",
-        "0,qn 0,sn 6,rn 6,rn 7,qn 7,sn 7,qn 7,sn 7,qn 7,sn 10,qp 10,sp",
+        "0,sn 0,st 6,rt 6,rt 6,rn 6,rn 7,sn 7,st 7,sn 7,st 7,sn 7,st 10,sp 10,st",
         Duration::from_micros(5),
         &[m.clone()],
         &[],

@@ -32,21 +32,26 @@
 //! 9401039609,s
 //! 9401094589,s
 //! 9420892765,r";
+//!
 //! // The network model for simulating the network between the client and the
 //! // server. Currently just a delay.
 //! let network = Network::new(Duration::from_millis(10));
+//!
 //! // Parse the raw trace into a queue of events for the simulator. This uses
 //! // the delay to generate a queue of events at the client and server in such
 //! // a way that the client is ensured to get the packets in the same order and
 //! // at the same time as in the raw trace.
 //! let mut input_trace = parse_trace(raw_trace, &network);
+//!
 //! // A simple machine that sends one padding packet 20 milliseconds after the
 //! // first normal packet is sent.
-//! let m = "02eNptibENAAAIwsDH9DRH//Mh4+Jg6EBCC3xshySQfnKvpjp0GFboAmI=";
+//! let m = "02eNptibEJAAAIw1of09Mc/c+HRMFFzFBoAlxkliTgurLfT6T9oQBWJgJi";
 //! let m = Machine::from_str(m).unwrap();
+//!
 //! // Run the simulator with the machine at the client. Run the simulation up
 //! // until 100 packets have been recorded (total, client and server).
 //! let trace = sim(&[m], &[], &mut input_trace, network.delay, 100, true);
+//!
 //! // print packets from the client's perspective
 //! let starting_time = trace[0].time;
 //! trace
@@ -59,7 +64,7 @@
 //!                 (p.time - starting_time).as_millis()
 //!             );
 //!         }
-//!         TriggerEvent::PaddingSent => {
+//!         TriggerEvent::PaddingSent { .. } => {
 //!             println!(
 //!                 "sent a padding packet at {} ms",
 //!                 (p.time - starting_time).as_millis()
@@ -67,7 +72,7 @@
 //!         }
 //!         TriggerEvent::NormalRecv => {
 //!             println!(
-//!                 "received a padding packet at {} ms",
+//!                 "received a normal packet at {} ms",
 //!                 (p.time - starting_time).as_millis()
 //!             );
 //!         }
@@ -79,6 +84,7 @@
 //!         }
 //!         _ => {}
 //!     });
+//!
 //! // Output:
 //! // sent a normal packet at 0 ms
 //! // received a normal packet at 19 ms
@@ -130,6 +136,8 @@ pub struct SimEvent {
     pub time: Instant,
     pub delay: Duration,
     pub client: bool,
+    // flag to track padding or normal packet
+    pub contains_padding: bool,
     // internal flag to mark event as bypass
     bypass: bool,
     // internal flag to mark event as replace
@@ -369,7 +377,7 @@ pub fn sim_advanced(
         if network_activity {
             // update last packet stats in state
             match next.event {
-                TriggerEvent::PaddingSent | TriggerEvent::NormalSent => {
+                TriggerEvent::TunnelSent => {
                     if next.client {
                         client.last_sent_time = current_time;
                     } else {
@@ -398,14 +406,28 @@ pub fn sim_advanced(
             // integration delays
             let mut n = next.clone();
             match next.event {
-                TriggerEvent::PaddingSent => {
-                    // padding adds the action delay
-                    n.time += n.delay;
-                }
-                TriggerEvent::PaddingRecv | TriggerEvent::NormalRecv | TriggerEvent::NormalSent => {
-                    // reported events remove the reporting delay
+                TriggerEvent::NormalSent => {
+                    // remove the reporting delay
                     n.time -= n.delay;
                 }
+                TriggerEvent::PaddingSent { .. } => {
+                    // padding packet adds the action delay
+                    n.time += n.delay;
+                }
+                TriggerEvent::TunnelSent => {
+                    if n.contains_padding {
+                        // padding packet adds the action delay
+                        n.time += n.delay;
+                    } else {
+                        // normal packet removes the reporting delay
+                        n.time -= n.delay;
+                    }
+                }
+                TriggerEvent::TunnelRecv | TriggerEvent::PaddingRecv | TriggerEvent::NormalRecv => {
+                    // remove the reporting delay
+                    n.time -= n.delay;
+                }
+
                 _ => {}
             }
 
@@ -519,6 +541,7 @@ fn pick_next<M: AsRef<[Machine]>>(
             fuzz: fastrand::i32(..),
             bypass: false,
             replace: false,
+            contains_padding: false,
         });
     }
 
@@ -585,6 +608,7 @@ fn do_internal<M: AsRef<[Machine]>>(
         fuzz: fastrand::i32(..),
         bypass: false,
         replace: false,
+        contains_padding: false,
     })
 }
 
@@ -649,12 +673,13 @@ fn do_scheduled<M: AsRef<[Machine]>>(
             };
 
             Some(SimEvent {
-                event: TriggerEvent::PaddingQueued { machine },
+                event: TriggerEvent::PaddingSent { machine },
                 time: a.time,
                 delay: action_delay,
                 client: is_client,
                 bypass,
                 replace,
+                contains_padding: true,
                 fuzz: fastrand::i32(..),
             })
         }
@@ -698,6 +723,7 @@ fn do_scheduled<M: AsRef<[Machine]>>(
                 client: is_client,
                 bypass: event_bypass,
                 replace: false,
+                contains_padding: false,
                 fuzz: fastrand::i32(..),
             })
         }
@@ -792,6 +818,7 @@ fn trigger_update<M: AsRef<[Machine]>>(
                             fuzz: fastrand::i32(..),
                             bypass: false,
                             replace: false,
+                            contains_padding: false,
                         },
                         Reverse(*current_time),
                     );
@@ -840,10 +867,10 @@ pub fn parse_trace_advanced(
                         .map(|i| i.reporting_delay.sample())
                         .unwrap_or(Duration::from_micros(0));
                     let reported = timestamp + reporting_delay;
-                    // TODO: add queueing delay to subtract from parsed time
                     sq.push(
-                        TriggerEvent::NormalQueued,
+                        TriggerEvent::NormalSent,
                         true,
+                        false,
                         reported,
                         reporting_delay,
                         Reverse(reported),
@@ -857,9 +884,9 @@ pub fn parse_trace_advanced(
                         .map(|i| i.reporting_delay.sample())
                         .unwrap_or(Duration::from_micros(0));
                     let reported = sent + reporting_delay;
-                    // TODO: add queueing delay to subtract from parsed time
                     sq.push(
-                        TriggerEvent::NormalQueued,
+                        TriggerEvent::NormalSent,
+                        false,
                         false,
                         reported,
                         reporting_delay,
