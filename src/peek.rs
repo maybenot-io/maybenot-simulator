@@ -6,13 +6,14 @@ use std::{
 };
 
 use maybenot::{event::Event, framework::MachineId, machine::Machine};
+use rand::Rng;
 
 use crate::{queue::SimQueue, ScheduledAction, SimEvent, SimState};
 
-pub fn peek_queue<M: AsRef<[Machine]>>(
+pub fn peek_queue<M: AsRef<[Machine]>, R: Rng>(
     sq: &mut SimQueue,
-    client: &mut SimState<M>,
-    server: &mut SimState<M>,
+    client: &mut SimState<M, R>,
+    server: &mut SimState<M, R>,
     earliest: Duration,
     current_time: Instant,
 ) -> (Duration, Option<SimEvent>) {

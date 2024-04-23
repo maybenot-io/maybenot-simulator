@@ -7,6 +7,7 @@ use std::{
 
 use log::debug;
 use maybenot::{Event, Machine, TriggerEvent};
+use rand::Rng;
 
 use crate::{queue::SimQueue, SimEvent, SimState};
 
@@ -50,11 +51,11 @@ const NETWORK_REPLACE_WINDOW: Duration = Duration::from_micros(1);
 //
 // Returns true if there was network activity (i.e., a packet was sent or
 // received), false otherwise.
-pub fn sim_network_stack<M: AsRef<[Machine]>>(
+pub fn sim_network_stack<M: AsRef<[Machine]>, R: Rng>(
     next: &SimEvent,
     sq: &mut SimQueue,
-    state: &SimState<M>,
-    recipient: &SimState<M>,
+    state: &SimState<M, R>,
+    recipient: &SimState<M, R>,
     network: &Network,
     current_time: &Instant,
 ) -> bool {

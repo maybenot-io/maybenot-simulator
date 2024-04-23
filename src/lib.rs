@@ -116,6 +116,7 @@ use network::Network;
 use queue::SimQueue;
 
 use maybenot::{Framework, Machine, MachineId, Timer, TriggerAction, TriggerEvent};
+use rand::Rng;
 
 use crate::{
     network::sim_network_stack,
@@ -150,9 +151,9 @@ pub struct ScheduledAction {
 }
 
 /// The state of the client or the server in the simulator.
-pub struct SimState<M> {
+pub struct SimState<M, R> {
     /// an instance of the Maybenot framework
-    framework: Framework<M>,
+    framework: Framework<M, R>,
     /// scheduled action timers
     scheduled_action: HashMap<MachineId, Option<ScheduledAction>>,
     /// scheduled internal timers
@@ -167,9 +168,10 @@ pub struct SimState<M> {
     integration: Option<Integration>,
 }
 
-impl<M> SimState<M>
+impl<M, R> SimState<M, R>
 where
     M: AsRef<[Machine]>,
+    R: Rng,
 {
     pub fn new(
         machines: M,
@@ -177,10 +179,17 @@ where
         max_padding_frac: f64,
         max_blocking_frac: f64,
         integration: Option<Integration>,
+        rng: R,
     ) -> Self {
         Self {
-            framework: Framework::new(machines, max_padding_frac, max_blocking_frac, current_time)
-                .unwrap(),
+            framework: Framework::new(
+                machines,
+                max_padding_frac,
+                max_blocking_frac,
+                current_time,
+                rng,
+            )
+            .unwrap(),
             scheduled_action: HashMap::new(),
             scheduled_internal: HashMap::new(),
             // has to be in the past
@@ -306,6 +315,7 @@ pub fn sim_advanced(
         args.max_padding_frac_client,
         args.max_blocking_frac_client,
         args.client_integration.cloned(),
+        rand::thread_rng(),
     );
     let mut server = SimState::new(
         machines_server,
@@ -313,6 +323,7 @@ pub fn sim_advanced(
         args.max_padding_frac_server,
         args.max_blocking_frac_server,
         args.server_integration.cloned(),
+        rand::thread_rng(),
     );
 
     let mut sim_iterations = 0;
@@ -454,10 +465,10 @@ pub fn sim_advanced(
     trace
 }
 
-fn pick_next<M: AsRef<[Machine]>>(
+fn pick_next<M: AsRef<[Machine]>, R: Rng>(
     sq: &mut SimQueue,
-    client: &mut SimState<M>,
-    server: &mut SimState<M>,
+    client: &mut SimState<M, R>,
+    server: &mut SimState<M, R>,
     current_time: Instant,
 ) -> Option<SimEvent> {
     // find the earliest scheduled, blocked, and queued events to determine the
@@ -560,9 +571,9 @@ fn pick_next<M: AsRef<[Machine]>>(
     pick_next(sq, client, server, current_time)
 }
 
-fn do_internal<M: AsRef<[Machine]>>(
-    client: &mut SimState<M>,
-    server: &mut SimState<M>,
+fn do_internal<M: AsRef<[Machine]>, R: Rng>(
+    client: &mut SimState<M, R>,
+    server: &mut SimState<M, R>,
     target: Instant,
 ) -> Option<SimEvent> {
     let mut machine: Option<MachineId> = None;
@@ -604,9 +615,9 @@ fn do_internal<M: AsRef<[Machine]>>(
     })
 }
 
-fn do_scheduled<M: AsRef<[Machine]>>(
-    client: &mut SimState<M>,
-    server: &mut SimState<M>,
+fn do_scheduled<M: AsRef<[Machine]>, R: Rng>(
+    client: &mut SimState<M, R>,
+    server: &mut SimState<M, R>,
     target: Instant,
 ) -> Option<SimEvent> {
     // find the action
@@ -722,8 +733,8 @@ fn do_scheduled<M: AsRef<[Machine]>>(
     }
 }
 
-fn trigger_update<M: AsRef<[Machine]>>(
-    state: &mut SimState<M>,
+fn trigger_update<M: AsRef<[Machine]>, R: Rng>(
+    state: &mut SimState<M, R>,
     next: &SimEvent,
     current_time: &Instant,
     sq: &mut SimQueue,
