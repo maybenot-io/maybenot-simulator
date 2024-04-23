@@ -6,7 +6,7 @@ use std::{
 };
 
 use log::debug;
-use maybenot::{Event, Machine, TriggerEvent};
+use maybenot::{Machine, TriggerEvent};
 use rand::Rng;
 
 use crate::{queue::SimQueue, SimEvent, SimState};
@@ -64,7 +64,7 @@ pub fn sim_network_stack<M: AsRef<[Machine]>, R: Rng>(
     match next.event {
         // here we simulate sending the packet into the tunnel
         TriggerEvent::NormalSent => {
-            debug!("\tqueue {}", Event::TunnelSent);
+            debug!("\tqueue {}", TriggerEvent::TunnelSent);
             sq.push_sim(
                 SimEvent {
                     event: TriggerEvent::TunnelSent,
@@ -136,7 +136,7 @@ pub fn sim_network_stack<M: AsRef<[Machine]>, R: Rng>(
                 }
             }
             // nothing to replace with (or we're not replacing), so queue up
-            debug!("\tqueue {}", Event::TunnelSent);
+            debug!("\tqueue {}", TriggerEvent::TunnelSent);
             sq.push_sim(
                 SimEvent {
                     event: TriggerEvent::TunnelSent,
@@ -153,7 +153,7 @@ pub fn sim_network_stack<M: AsRef<[Machine]>, R: Rng>(
             false
         }
         TriggerEvent::TunnelSent => {
-            debug!("\tqueue {}", Event::TunnelRecv);
+            debug!("\tqueue {}", TriggerEvent::TunnelRecv);
             if !next.contains_padding {
                 // The time the event was reported to us is in next.time. We have to
                 // remove the reporting delay locally, then add a network delay and
@@ -183,7 +183,7 @@ pub fn sim_network_stack<M: AsRef<[Machine]>, R: Rng>(
             }
 
             // padding, less complicated
-            debug!("\tqueue {}", Event::TunnelRecv);
+            debug!("\tqueue {}", TriggerEvent::TunnelRecv);
             let reporting_delay = recipient.reporting_delay();
             // action delay + network + recipient reporting delay
             let reported = next.time + next.delay + network.sample() + reporting_delay;
@@ -201,7 +201,7 @@ pub fn sim_network_stack<M: AsRef<[Machine]>, R: Rng>(
         TriggerEvent::TunnelRecv => {
             // spawn NormalRecv or PaddingRecv
             if next.contains_padding {
-                debug!("\tqueue {}", Event::PaddingRecv);
+                debug!("\tqueue {}", TriggerEvent::PaddingRecv);
                 sq.push(
                     TriggerEvent::PaddingRecv,
                     next.client,
@@ -211,7 +211,7 @@ pub fn sim_network_stack<M: AsRef<[Machine]>, R: Rng>(
                     Reverse(next.time),
                 );
             } else {
-                debug!("\tqueue {}", Event::NormalRecv);
+                debug!("\tqueue {}", TriggerEvent::NormalRecv);
                 sq.push(
                     TriggerEvent::NormalRecv,
                     next.client,

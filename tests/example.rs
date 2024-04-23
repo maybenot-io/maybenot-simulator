@@ -1,5 +1,11 @@
 use enum_map::enum_map;
-use maybenot::{Action, Dist, DistType, Event, Machine, State, Trans, TriggerEvent};
+use maybenot::{
+    action::Action,
+    dist::{Dist, DistType},
+    event::Event,
+    state::{State, Trans},
+    Machine, TriggerEvent,
+};
 use maybenot_simulator::{network::Network, parse_trace, sim};
 use std::{str::FromStr, time::Duration};
 

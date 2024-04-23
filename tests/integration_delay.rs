@@ -1,6 +1,12 @@
 use std::time::Duration;
 
-use maybenot::{Action, Dist, DistType, Event, Machine, State, Trans};
+use maybenot::{
+    action::Action,
+    dist::{Dist, DistType},
+    event::Event,
+    state::{State, Trans},
+    Machine,
+};
 use maybenot_simulator::{
     integration::{BinDist, Integration},
     network::Network,
