@@ -371,15 +371,12 @@ pub fn sim_advanced(
 
         if network_activity {
             // update last packet stats in state
-            match next.event {
-                TriggerEvent::TunnelSent => {
-                    if next.client {
-                        client.last_sent_time = current_time;
-                    } else {
-                        server.last_sent_time = current_time;
-                    }
+            if next.event == TriggerEvent::TunnelSent {
+                if next.client {
+                    client.last_sent_time = current_time;
+                } else {
+                    server.last_sent_time = current_time;
                 }
-                _ => {}
             }
         }
 

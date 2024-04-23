@@ -149,7 +149,7 @@ pub fn sim_network_stack<M: AsRef<[Machine]>>(
                 },
                 Reverse(next.time),
             );
-            return false;
+            false
         }
         TriggerEvent::TunnelSent => {
             debug!("\tqueue {}", Event::TunnelRecv);
@@ -195,7 +195,7 @@ pub fn sim_network_stack<M: AsRef<[Machine]>>(
                 Reverse(reported),
             );
 
-            return true;
+            true
         }
         TriggerEvent::TunnelRecv => {
             // spawn NormalRecv or PaddingRecv
@@ -220,7 +220,7 @@ pub fn sim_network_stack<M: AsRef<[Machine]>>(
                     Reverse(next.time),
                 );
             }
-            return true;
+            true
         }
         // all other events are not network activity
         _ => false,
