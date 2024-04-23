@@ -58,32 +58,35 @@
 //!     .into_iter()
 //!     .filter(|p| p.client)
 //!     .for_each(|p| match p.event {
-//!         TriggerEvent::NormalSent => {
-//!             println!(
-//!                 "sent a normal packet at {} ms",
-//!                 (p.time - starting_time).as_millis()
-//!             );
+//!         TriggerEvent::TunnelSent => {
+//!             if p.contains_padding {
+//!                 println!(
+//!                     "sent a padding packet at {} ms",
+//!                     (p.time - starting_time).as_millis()
+//!                 );
+//!             } else {
+//!                 println!(
+//!                     "sent a normal packet at {} ms",
+//!                     (p.time - starting_time).as_millis()
+//!                 );
+//!             }
 //!         }
-//!         TriggerEvent::PaddingSent { .. } => {
-//!             println!(
-//!                 "sent a padding packet at {} ms",
-//!                 (p.time - starting_time).as_millis()
-//!             );
-//!         }
-//!         TriggerEvent::NormalRecv => {
-//!             println!(
-//!                 "received a normal packet at {} ms",
-//!                 (p.time - starting_time).as_millis()
-//!             );
-//!         }
-//!         TriggerEvent::PaddingRecv => {
-//!             println!(
-//!                 "received a padding packet at {} ms",
-//!                 (p.time - starting_time).as_millis()
-//!             );
+//!         TriggerEvent::TunnelRecv => {
+//!             if p.contains_padding {
+//!                 println!(
+//!                     "received a padding packet at {} ms",
+//!                     (p.time - starting_time).as_millis()
+//!                 );
+//!             } else {
+//!                 println!(
+//!                     "received a normal packet at {} ms",
+//!                     (p.time - starting_time).as_millis()
+//!                 );
+//!             }
 //!         }
 //!         _ => {}
 //!     });
+
 //!
 //! // Output:
 //! // sent a normal packet at 0 ms

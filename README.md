@@ -63,32 +63,35 @@ let trace = sim(&[m], &[], &mut input_trace, network.delay, 100, true);
 // print packets from the client's perspective
 let starting_time = trace[0].time;
 trace
+trace
     .into_iter()
     .filter(|p| p.client)
     .for_each(|p| match p.event {
-        TriggerEvent::NormalSent => {
-            println!(
-                "sent a normal packet at {} ms",
-                (p.time - starting_time).as_millis()
-            );
+        TriggerEvent::TunnelSent => {
+            if p.contains_padding {
+                println!(
+                    "sent a padding packet at {} ms",
+                    (p.time - starting_time).as_millis()
+                );
+            } else {
+                println!(
+                    "sent a normal packet at {} ms",
+                    (p.time - starting_time).as_millis()
+                );
+            }
         }
-        TriggerEvent::PaddingSent  { .. } => {
-            println!(
-                "sent a padding packet at {} ms",
-                (p.time - starting_time).as_millis()
-            );
-        }
-        TriggerEvent::NormalRecv => {
-            println!(
-                "received a padding packet at {} ms",
-                (p.time - starting_time).as_millis()
-            );
-        }
-        TriggerEvent::PaddingRecv => {
-            println!(
-                "received a padding packet at {} ms",
-                (p.time - starting_time).as_millis()
-            );
+        TriggerEvent::TunnelRecv => {
+            if p.contains_padding {
+                println!(
+                    "received a padding packet at {} ms",
+                    (p.time - starting_time).as_millis()
+                );
+            } else {
+                println!(
+                    "received a normal packet at {} ms",
+                    (p.time - starting_time).as_millis()
+                );
+            }
         }
         _ => {}
     });
