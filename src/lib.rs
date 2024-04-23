@@ -115,12 +115,7 @@ use log::debug;
 use network::Network;
 use queue::SimQueue;
 
-use maybenot::{
-    action::{Timer, TriggerAction},
-    event::TriggerEvent,
-    framework::{Framework, MachineId},
-    machine::Machine,
-};
+use maybenot::{Framework, Machine, MachineId, Timer, TriggerAction, TriggerEvent};
 
 use crate::{
     network::sim_network_stack,

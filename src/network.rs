@@ -6,7 +6,7 @@ use std::{
 };
 
 use log::debug;
-use maybenot::{event::Event, event::TriggerEvent, machine::Machine};
+use maybenot::{Event, Machine, TriggerEvent};
 
 use crate::{queue::SimQueue, SimEvent, SimState};
 

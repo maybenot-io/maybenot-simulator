@@ -7,12 +7,8 @@ use std::{
 };
 
 use maybenot::{
-    action::{Action, Timer},
-    counter::{Counter, CounterUpdate, Operation},
-    dist::{Dist, DistType},
-    event::{Event, TriggerEvent},
-    machine::Machine,
-    state::{State, Trans},
+    Action, Counter, CounterUpdate, Dist, DistType, Event, Machine, Operation, State, Timer, Trans,
+    TriggerEvent,
 };
 
 use enum_map::enum_map;
