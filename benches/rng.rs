@@ -1,12 +1,15 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use enum_map::enum_map;
 use maybenot::dist::{Dist, DistType};
+use maybenot::event::Event;
+use maybenot::state::{State, Trans};
 use rand_core::RngCore;
 use rand_xoshiro::rand_core::SeedableRng;
 use rand_xoshiro::Xoshiro256StarStar;
 
 pub fn dist_rng_source_benchmarks(c: &mut Criterion) {
-    let n = 100;
-    c.bench_function("11 distributions 100 samples, thread_rng()", |b| {
+    let n = 1000;
+    c.bench_function("11 distributions 1000 samples, thread_rng()", |b| {
         let rng = &mut rand::thread_rng();
         b.iter(|| {
             sample_uniform(rng, black_box(n));
@@ -22,7 +25,7 @@ pub fn dist_rng_source_benchmarks(c: &mut Criterion) {
             sample_beta(rng, black_box(n));
         })
     });
-    c.bench_function("11 distributions 100 samples, Xoshiro256StarStar", |b| {
+    c.bench_function("11 distributions 1000 samples, Xoshiro256StarStar", |b| {
         let rng = &mut Xoshiro256StarStar::seed_from_u64(0);
         b.iter(|| {
             sample_uniform(rng, black_box(n));
@@ -40,8 +43,48 @@ pub fn dist_rng_source_benchmarks(c: &mut Criterion) {
     });
 }
 
-criterion_group!(rng, dist_rng_source_benchmarks);
+pub fn transition_rng_source_benchmarks(c: &mut Criterion) {
+    let n = 1000;
+
+    // create a state with several transition probabilities
+    let state = State::new(enum_map! {
+        Event::TunnelSent => vec![
+            Trans(0, 0.1),
+            Trans(1, 0.1),
+            Trans(2, 0.1),
+            Trans(3, 0.1),
+            Trans(4, 0.1),
+            Trans(5, 0.1),
+            Trans(6, 0.1),
+            Trans(7, 0.1),
+            Trans(8, 0.1),
+            Trans(9, 0.1),
+        ],
+    _ => vec![],
+    });
+
+    c.bench_function("1000 state transitions, thread_rng()", |b| {
+        let rng = &mut rand::thread_rng();
+        b.iter(|| {
+            sample_state(&state, rng, black_box(n));
+        })
+    });
+    c.bench_function("1000 state transitions, Xoshiro256StarStar", |b| {
+        let rng = &mut Xoshiro256StarStar::seed_from_u64(0);
+        b.iter(|| {
+            sample_state(&state, rng, black_box(n));
+        })
+    });
+}
+
+criterion_group!(rng, dist_rng_source_benchmarks, transition_rng_source_benchmarks);
 criterion_main!(rng);
+
+fn sample_state<R: RngCore>(s: &State, rng: &mut R, n: usize) {
+    for _ in 0..n {
+        s.sample_state(Event::TunnelSent, rng);
+    }
+}
 
 fn sample_uniform<R: RngCore>(rng: &mut R, n: usize) {
     let d = Dist {
