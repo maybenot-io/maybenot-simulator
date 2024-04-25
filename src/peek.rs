@@ -5,7 +5,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use maybenot::{event::Event, framework::MachineId, machine::Machine};
+use maybenot::{event::Event, MachineId, Machine};
 use rand::Rng;
 
 use crate::{queue::SimQueue, ScheduledAction, SimEvent, SimState};

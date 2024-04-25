@@ -14,7 +14,7 @@
 //!
 //! ## Example usage
 //! ```
-//! use maybenot::{event::TriggerEvent, machine::Machine};
+//! use maybenot::{event::TriggerEvent, Machine};
 //! use maybenot_simulator::{network::Network, parse_trace, sim};
 //! use std::{str::FromStr, time::Duration};
 //!
