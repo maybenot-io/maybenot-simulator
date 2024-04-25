@@ -119,7 +119,7 @@ use network::Network;
 use queue::SimQueue;
 
 use maybenot::{Framework, Machine, MachineId, Timer, TriggerAction, TriggerEvent};
-use rand::Rng;
+use rand::RngCore;
 
 use crate::{
     network::sim_network_stack,
@@ -174,7 +174,7 @@ pub struct SimState<M, R> {
 impl<M, R> SimState<M, R>
 where
     M: AsRef<[Machine]>,
-    R: Rng,
+    R: RngCore,
 {
     pub fn new(
         machines: M,
@@ -468,7 +468,7 @@ pub fn sim_advanced(
     trace
 }
 
-fn pick_next<M: AsRef<[Machine]>, R: Rng>(
+fn pick_next<M: AsRef<[Machine]>, R: RngCore>(
     sq: &mut SimQueue,
     client: &mut SimState<M, R>,
     server: &mut SimState<M, R>,
@@ -574,7 +574,7 @@ fn pick_next<M: AsRef<[Machine]>, R: Rng>(
     pick_next(sq, client, server, current_time)
 }
 
-fn do_internal<M: AsRef<[Machine]>, R: Rng>(
+fn do_internal<M: AsRef<[Machine]>, R: RngCore>(
     client: &mut SimState<M, R>,
     server: &mut SimState<M, R>,
     target: Instant,
@@ -618,7 +618,7 @@ fn do_internal<M: AsRef<[Machine]>, R: Rng>(
     })
 }
 
-fn do_scheduled<M: AsRef<[Machine]>, R: Rng>(
+fn do_scheduled<M: AsRef<[Machine]>, R: RngCore>(
     client: &mut SimState<M, R>,
     server: &mut SimState<M, R>,
     target: Instant,
@@ -736,7 +736,7 @@ fn do_scheduled<M: AsRef<[Machine]>, R: Rng>(
     }
 }
 
-fn trigger_update<M: AsRef<[Machine]>, R: Rng>(
+fn trigger_update<M: AsRef<[Machine]>, R: RngCore>(
     state: &mut SimState<M, R>,
     next: &SimEvent,
     current_time: &Instant,
