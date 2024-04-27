@@ -1,8 +1,14 @@
+use std::time::Duration;
+
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use enum_map::enum_map;
 use maybenot::dist::{Dist, DistType};
 use maybenot::event::Event;
 use maybenot::state::{State, Trans};
+use maybenot::Machine;
+use maybenot_simulator::network::Network;
+use maybenot_simulator::queue::SimQueue;
+use maybenot_simulator::{parse_trace, sim_advanced, SimulatorArgs};
 use rand_core::RngCore;
 use rand_xoshiro::rand_core::SeedableRng;
 use rand_xoshiro::Xoshiro256StarStar;
@@ -77,8 +83,55 @@ pub fn transition_rng_source_benchmarks(c: &mut Criterion) {
     });
 }
 
-criterion_group!(rng, dist_rng_source_benchmarks, transition_rng_source_benchmarks);
+pub fn complete_trace_rng_source_benchmarks(c: &mut Criterion) {
+    let n = 1;
+    const EARLY_TRACE: &str = include_str!("../tests/EARLY_TEST_TRACE.log");
+    let network = Network::new(Duration::from_millis(10));
+    let input = parse_trace(EARLY_TRACE, &network);
+    let mut args = SimulatorArgs::new(&network, 1000, true);
+
+    let client: Vec<Machine> = vec![];
+    let server: Vec<Machine> = vec![];
+    // default is to use thread_rng()
+    args.insecure_rng_seed = None;
+    c.bench_function("1k trace simulation, no machines, thread_rng()", |b| {
+        b.iter(|| {
+            run_sim(&client, &server, &input, &args, black_box(n));
+        })
+    });
+    // setting the seed enables deterministic simulation using the Xoshiro256StarStar RNG
+    args.insecure_rng_seed = Some(0);
+    c.bench_function(
+        "1k trace simulation, no machines, Xoshiro256StarStar",
+        |b| {
+            b.iter(|| {
+                run_sim(&client, &server, &input, &args, black_box(n));
+            })
+        },
+    );
+
+    // TODO: benchmarks for padding machines and blocking machines
+}
+
+criterion_group!(
+    rng,
+    dist_rng_source_benchmarks,
+    transition_rng_source_benchmarks,
+    complete_trace_rng_source_benchmarks
+);
 criterion_main!(rng);
+
+fn run_sim(
+    client: &[Machine],
+    server: &[Machine],
+    input: &SimQueue,
+    args: &SimulatorArgs,
+    n: usize,
+) {
+    for _ in 0..n {
+        sim_advanced(client, server, &mut input.clone(), &args);
+    }
+}
 
 fn sample_state<R: RngCore>(s: &State, rng: &mut R, n: usize) {
     for _ in 0..n {

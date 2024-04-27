@@ -7,9 +7,8 @@ use std::{
 
 use log::debug;
 use maybenot::{Machine, TriggerEvent};
-use rand::Rng;
 
-use crate::{queue::SimQueue, SimEvent, SimState};
+use crate::{queue::SimQueue, RngSource, SimEvent, SimState};
 
 /// A model of the network between the client and server.
 #[derive(Debug, Clone)]
@@ -23,6 +22,7 @@ impl Network {
     }
 
     pub fn sample(&self) -> Duration {
+        // NOTE: if ever randomized, need to use the configured RngSource
         self.delay
     }
 }
@@ -51,11 +51,11 @@ const NETWORK_REPLACE_WINDOW: Duration = Duration::from_micros(1);
 //
 // Returns true if there was network activity (i.e., a packet was sent or
 // received), false otherwise.
-pub fn sim_network_stack<M: AsRef<[Machine]>, R: Rng>(
+pub(crate) fn sim_network_stack<M: AsRef<[Machine]>>(
     next: &SimEvent,
     sq: &mut SimQueue,
-    state: &SimState<M, R>,
-    recipient: &SimState<M, R>,
+    state: &SimState<M, RngSource>,
+    recipient: &SimState<M, RngSource>,
     network: &Network,
     current_time: &Instant,
 ) -> bool {

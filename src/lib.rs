@@ -119,12 +119,53 @@ use network::Network;
 use queue::SimQueue;
 
 use maybenot::{Framework, Machine, MachineId, Timer, TriggerAction, TriggerEvent};
-use rand::RngCore;
+use rand::{rngs::ThreadRng, RngCore};
+use rand_xoshiro::rand_core::SeedableRng;
+use rand_xoshiro::Xoshiro256StarStar;
 
 use crate::{
     network::sim_network_stack,
     peek::{peek_blocked_exp, peek_internal, peek_queue, peek_scheduled},
 };
+
+// Enum to encapsulate different RngCore sources: in the Maybenot Framework, the
+// RngCore trait is not ?Sized (unnecessary overhead for the framework), so we
+// have to work around this by using an enum to support selecting rng source as
+// a simulation option.
+enum RngSource {
+    Thread(ThreadRng),
+    Xoshiro(Xoshiro256StarStar),
+}
+
+impl RngCore for RngSource {
+    fn next_u32(&mut self) -> u32 {
+        match self {
+            RngSource::Thread(rng) => rng.next_u32(),
+            RngSource::Xoshiro(rng) => rng.next_u32(),
+        }
+    }
+
+    fn next_u64(&mut self) -> u64 {
+        match self {
+            RngSource::Thread(rng) => rng.next_u64(),
+            RngSource::Xoshiro(rng) => rng.next_u64(),
+        }
+    }
+
+    fn fill_bytes(&mut self, dest: &mut [u8]) {
+        match self {
+            RngSource::Thread(rng) => rng.fill_bytes(dest),
+            RngSource::Xoshiro(rng) => rng.fill_bytes(dest),
+        }
+    }
+
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
+        match self {
+            RngSource::Thread(rng) => rng.try_fill_bytes(dest),
+            RngSource::Xoshiro(rng) => rng.try_fill_bytes(dest),
+        }
+    }
+}
 
 /// SimEvent represents an event in the simulator. It is used internally to
 /// represent events that are to be processed by the simulator (in SimQueue) and
@@ -171,10 +212,9 @@ pub struct SimState<M, R> {
     integration: Option<Integration>,
 }
 
-impl<M, R> SimState<M, R>
+impl<M> SimState<M, RngSource>
 where
     M: AsRef<[Machine]>,
-    R: RngCore,
 {
     pub fn new(
         machines: M,
@@ -182,8 +222,15 @@ where
         max_padding_frac: f64,
         max_blocking_frac: f64,
         integration: Option<Integration>,
-        rng: R,
+        insecure_rng_seed: Option<u64>,
     ) -> Self {
+        let rng = match insecure_rng_seed {
+            // deterministic, insecure RNG
+            Some(seed) => RngSource::Xoshiro(Xoshiro256StarStar::seed_from_u64(seed)),
+            // secure RNG, default
+            None => RngSource::Thread(rand::thread_rng()),
+        };
+
         Self {
             framework: Framework::new(
                 machines,
@@ -209,21 +256,21 @@ where
     pub fn reporting_delay(&self) -> Duration {
         self.integration
             .as_ref()
-            .map(|i| i.reporting_delay.sample())
+            .map(|i| i.reporting_delay())
             .unwrap_or(Duration::from_micros(0))
     }
 
     pub fn action_delay(&self) -> Duration {
         self.integration
             .as_ref()
-            .map(|i| i.action_delay.sample())
+            .map(|i| i.action_delay())
             .unwrap_or(Duration::from_micros(0))
     }
 
     pub fn trigger_delay(&self) -> Duration {
         self.integration
             .as_ref()
-            .map(|i| i.trigger_delay.sample())
+            .map(|i| i.trigger_delay())
             .unwrap_or(Duration::from_micros(0))
     }
 }
@@ -265,16 +312,37 @@ pub fn sim(
 /// Arguments for [`sim_advanced`].
 #[derive(Clone, Debug)]
 pub struct SimulatorArgs<'a> {
+    /// The network model for simulating the network between the client and the
+    /// server.
     pub network: &'a Network,
+    /// The maximum number of events to simulate.
     pub max_trace_length: usize,
+    /// The maximum number of iterations to run the simulator for. If 0, the
+    /// simulator will run until it stops.
     pub max_sim_iterations: usize,
+    /// If true, only client events are returned in the output trace.
     pub only_client_events: bool,
+    /// If true, only events that represent network packets are returned in the
+    /// output trace.
     pub only_network_activity: bool,
+    /// The maximum fraction of padding for the client's instance of the
+    /// Maybenot framework.
     pub max_padding_frac_client: f64,
+    /// The maximum fraction of blocking for the client's instance of the
+    /// Maybenot framework.
     pub max_blocking_frac_client: f64,
+    /// The maximum fraction of padding for the server's instance of the
+    /// Maybenot framework.
     pub max_padding_frac_server: f64,
+    /// The maximum fraction of blocking for the server's instance of the
+    /// Maybenot framework.
     pub max_blocking_frac_server: f64,
+    /// The seed for the deterministic (insecure) Xoshiro256StarStar RNG. If
+    /// None, the simulator will use the cryptographically secure thread_rng().
+    pub insecure_rng_seed: Option<u64>,
+    /// Optional client integration delays.
     pub client_integration: Option<&'a Integration>,
+    /// Optional server integration delays.
     pub server_integration: Option<&'a Integration>,
 }
 
@@ -290,6 +358,7 @@ impl<'a> SimulatorArgs<'a> {
             max_blocking_frac_client: 0.0,
             max_padding_frac_server: 0.0,
             max_blocking_frac_server: 0.0,
+            insecure_rng_seed: None,
             client_integration: None,
             server_integration: None,
         }
@@ -311,14 +380,13 @@ pub fn sim_advanced(
     // put the mocked current time at the first event
     let mut current_time = sq.peek().unwrap().0.time;
 
-    // the client and server states
     let mut client = SimState::new(
         machines_client,
         current_time,
         args.max_padding_frac_client,
         args.max_blocking_frac_client,
         args.client_integration.cloned(),
-        rand::thread_rng(),
+        args.insecure_rng_seed,
     );
     let mut server = SimState::new(
         machines_server,
@@ -326,7 +394,7 @@ pub fn sim_advanced(
         args.max_padding_frac_server,
         args.max_blocking_frac_server,
         args.server_integration.cloned(),
-        rand::thread_rng(),
+        args.insecure_rng_seed,
     );
 
     let mut sim_iterations = 0;
@@ -468,10 +536,10 @@ pub fn sim_advanced(
     trace
 }
 
-fn pick_next<M: AsRef<[Machine]>, R: RngCore>(
+fn pick_next<M: AsRef<[Machine]>>(
     sq: &mut SimQueue,
-    client: &mut SimState<M, R>,
-    server: &mut SimState<M, R>,
+    client: &mut SimState<M, RngSource>,
+    server: &mut SimState<M, RngSource>,
     current_time: Instant,
 ) -> Option<SimEvent> {
     // find the earliest scheduled, blocked, and queued events to determine the
@@ -574,9 +642,9 @@ fn pick_next<M: AsRef<[Machine]>, R: RngCore>(
     pick_next(sq, client, server, current_time)
 }
 
-fn do_internal<M: AsRef<[Machine]>, R: RngCore>(
-    client: &mut SimState<M, R>,
-    server: &mut SimState<M, R>,
+fn do_internal<M: AsRef<[Machine]>>(
+    client: &mut SimState<M, RngSource>,
+    server: &mut SimState<M, RngSource>,
     target: Instant,
 ) -> Option<SimEvent> {
     let mut machine: Option<MachineId> = None;
@@ -618,9 +686,9 @@ fn do_internal<M: AsRef<[Machine]>, R: RngCore>(
     })
 }
 
-fn do_scheduled<M: AsRef<[Machine]>, R: RngCore>(
-    client: &mut SimState<M, R>,
-    server: &mut SimState<M, R>,
+fn do_scheduled<M: AsRef<[Machine]>>(
+    client: &mut SimState<M, RngSource>,
+    server: &mut SimState<M, RngSource>,
     target: Instant,
 ) -> Option<SimEvent> {
     // find the action
@@ -736,8 +804,8 @@ fn do_scheduled<M: AsRef<[Machine]>, R: RngCore>(
     }
 }
 
-fn trigger_update<M: AsRef<[Machine]>, R: RngCore>(
-    state: &mut SimState<M, R>,
+fn trigger_update<M: AsRef<[Machine]>>(
+    state: &mut SimState<M, RngSource>,
     next: &SimEvent,
     current_time: &Instant,
     sq: &mut SimQueue,
@@ -866,11 +934,15 @@ pub fn parse_trace_advanced(
                 starting_time + Duration::from_nanos(parts[0].trim().parse::<u64>().unwrap());
             // let size = parts[2].trim().parse::<u64>().unwrap();
 
+            // NOTE: for supporting deterministic simulation with a seed, note
+            // that once network is randomized and integration delays are used,
+            // both need to be updated below. Unfortunately, users of the
+            // simulator would have to take this parsing into account as well.
             match parts[1] {
                 "s" | "sn" => {
                     // client sent at the given time
                     let reporting_delay = client
-                        .map(|i| i.reporting_delay.sample())
+                        .map(|i| i.reporting_delay())
                         .unwrap_or(Duration::from_micros(0));
                     let reported = timestamp + reporting_delay;
                     sq.push(
@@ -887,7 +959,7 @@ pub fn parse_trace_advanced(
                     let sent = timestamp.checked_sub(network.delay).unwrap();
                     // but reported to the Maybenot framework at the server with delay
                     let reporting_delay = server
-                        .map(|i| i.reporting_delay.sample())
+                        .map(|i| i.reporting_delay())
                         .unwrap_or(Duration::from_micros(0));
                     let reported = sent + reporting_delay;
                     sq.push(
